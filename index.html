@@ -1,0 +1,298 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>จอเรียกคิว</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@500;700&family=IBM+Plex+Sans+Thai:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --bg:#0B2320;
+    --panel:#123832;
+    --panel-2:#163F38;
+    --amber:#FFC145;
+    --mint:#6FE7C8;
+    --text:#EAF6F2;
+    --muted:#9FC7BE;
+    --divider:rgba(234,246,242,0.10);
+  }
+  *{box-sizing:border-box;}
+  html,body{
+    margin:0; padding:0; height:100%;
+    background:var(--bg);
+    color:var(--text);
+    font-family:'IBM Plex Sans Thai', sans-serif;
+    overflow:hidden;
+  }
+  body{
+    display:grid;
+    grid-template-rows:auto 1fr auto;
+    height:100vh;
+  }
+  header{
+    padding:22px 40px 6px;
+    display:flex; align-items:center; justify-content:space-between;
+    border-bottom:1px solid var(--divider);
+  }
+  header .brand{
+    font-weight:700; font-size:22px; letter-spacing:.02em;
+  }
+  header .brand span{color:var(--amber);}
+  header .clock{
+    font-family:'IBM Plex Mono', monospace;
+    font-size:20px; color:var(--muted);
+  }
+
+  main{
+    display:grid;
+    grid-template-columns: 1.3fr 1fr;
+    gap:28px;
+    padding:28px 40px;
+    min-height:0;
+  }
+
+  .now-serving{
+    background:var(--panel);
+    border-radius:20px;
+    padding:36px 40px;
+    display:flex; flex-direction:column; gap:18px;
+    min-height:0;
+  }
+  .now-serving > .label{
+    font-size:18px; color:var(--muted); font-weight:500;
+  }
+  .primary-call{
+    display:flex; align-items:center; gap:36px;
+  }
+  .flap-row{ display:flex; gap:10px; }
+  .flap{
+    position:relative;
+    width:78px; height:110px;
+    background:var(--panel-2);
+    border-radius:10px;
+    display:flex; align-items:center; justify-content:center;
+    font-family:'IBM Plex Mono', monospace;
+    font-weight:700; font-size:64px;
+    color:var(--amber);
+    box-shadow: inset 0 0 0 1px var(--divider);
+    overflow:hidden;
+  }
+  .flap::after{
+    content:'';
+    position:absolute; left:0; right:0; top:50%;
+    height:2px; background:rgba(0,0,0,.35);
+    transform:translateY(-1px);
+  }
+  .flap.flip{ animation:flipDown .5s ease; }
+  @keyframes flipDown{
+    0%{ transform:rotateX(0deg); filter:brightness(1); }
+    45%{ transform:rotateX(90deg); filter:brightness(1.4); }
+    55%{ transform:rotateX(90deg); }
+    100%{ transform:rotateX(0deg); filter:brightness(1); }
+  }
+  .counter-tag{
+    font-size:20px; color:var(--muted);
+  }
+  .counter-tag b{
+    display:block; font-size:44px; color:var(--text); font-family:'IBM Plex Mono',monospace; margin-top:4px;
+  }
+
+  .other-counters{
+    margin-top:auto;
+    display:grid;
+    grid-template-columns:repeat(auto-fill,minmax(160px,1fr));
+    gap:14px;
+  }
+  .counter-card{
+    background:var(--panel-2);
+    border-radius:14px;
+    padding:14px 16px;
+    display:flex; flex-direction:column; gap:6px;
+  }
+  .counter-card .c-label{ font-size:13px; color:var(--muted); }
+  .counter-card .c-queue{
+    font-family:'IBM Plex Mono',monospace; font-weight:700; font-size:28px; color:var(--mint);
+  }
+
+  .side{
+    display:flex; flex-direction:column; gap:16px; min-height:0;
+  }
+  .waiting-card{
+    background:var(--panel); border-radius:20px; padding:26px 30px;
+    display:flex; align-items:center; justify-content:space-between;
+  }
+  .waiting-card .num{ font-family:'IBM Plex Mono',monospace; font-weight:700; font-size:52px; color:var(--text); }
+  .waiting-card .lbl{ color:var(--muted); font-size:16px; max-width:130px; text-align:right; }
+
+  .history{
+    background:var(--panel); border-radius:20px; padding:22px 26px; flex:1; min-height:0; display:flex; flex-direction:column;
+  }
+  .history .label{ color:var(--muted); font-size:15px; margin-bottom:10px; }
+  .history ul{ list-style:none; margin:0; padding:0; overflow-y:auto; }
+  .history li{
+    display:flex; justify-content:space-between; align-items:center;
+    padding:10px 0; border-bottom:1px solid var(--divider);
+    font-family:'IBM Plex Mono',monospace; font-size:18px;
+  }
+  .history li .st{
+    font-family:'IBM Plex Sans Thai',sans-serif; font-size:12px; color:var(--muted);
+    padding:2px 8px; border-radius:20px; background:var(--panel-2);
+  }
+
+  footer{
+    padding:10px 40px 18px; text-align:center; color:var(--muted); font-size:13px;
+  }
+
+  @media (max-width: 900px){
+    main{ grid-template-columns:1fr; }
+    .flap{ width:56px; height:80px; font-size:42px; }
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="brand">จอเรียกคิว<span>·</span> Queue Board</div>
+  <div class="clock" id="clock">--:--:--</div>
+</header>
+
+<main>
+  <div class="now-serving">
+    <div class="label">กำลังเรียกคิวหมายเลข</div>
+    <div class="primary-call">
+      <div class="flap-row" id="flapRow"></div>
+      <div class="counter-tag">ช่องบริการ<b id="primaryCounter">—</b></div>
+    </div>
+    <div class="other-counters" id="otherCounters"></div>
+  </div>
+
+  <div class="side">
+    <div class="waiting-card">
+      <div>
+        <div class="num" id="waitingCount">0</div>
+      </div>
+      <div class="lbl">คิวที่กำลังรอเรียก</div>
+    </div>
+    <div class="history">
+      <div class="label">ประวัติการเรียกล่าสุด</div>
+      <ul id="historyList"></ul>
+    </div>
+  </div>
+</main>
+
+<footer>อัปเดตข้อมูลอัตโนมัติทุก 4 วินาที · เปิดเสียงของเบราว์เซอร์เพื่อฟังการประกาศเรียกคิว</footer>
+
+<script>
+  // ==== ตั้งค่า: วาง URL ของ Google Apps Script Web App ที่นี่ ====
+  const API_URL = "https://script.google.com/macros/s/AKfycbw348SVQh3Y8MfmMuP9uZFHTU3edTiN37cgMQ1Kk19qOFQLTafF6S8nr0lhv1zLRUB4/exec";
+
+  let lastPrimaryQueue = null;
+  let audioUnlocked = false;
+
+  document.addEventListener('click', () => { audioUnlocked = true; }, { once:true });
+
+  function updateClock(){
+    const now = new Date();
+    document.getElementById('clock').textContent = now.toLocaleTimeString('th-TH', { hour12:false });
+  }
+  setInterval(updateClock, 1000); updateClock();
+
+  function renderFlaps(text, changed){
+    const row = document.getElementById('flapRow');
+    const chars = text.split('');
+    row.innerHTML = '';
+    chars.forEach((ch) => {
+      const div = document.createElement('div');
+      div.className = 'flap' + (changed ? ' flip' : '');
+      div.textContent = ch;
+      row.appendChild(div);
+    });
+  }
+
+  function speak(queue, counter){
+    if (!('speechSynthesis' in window)) return;
+    const spelled = queue.split('').join(' ');
+    const utter = new SpeechSynthesisUtterance(
+      `เชิญหมายเลข ${spelled} ที่ช่องบริการ ${counter}`
+    );
+    utter.lang = 'th-TH';
+    utter.rate = 0.95;
+    window.speechSynthesis.cancel();
+    window.speechSynthesis.speak(utter);
+  }
+
+  function chime(){
+    try{
+      const ctx = new (window.AudioContext || window.webkitAudioContext)();
+      const o = ctx.createOscillator(); const g = ctx.createGain();
+      o.type = 'sine'; o.frequency.value = 880;
+      g.gain.setValueAtTime(0.001, ctx.currentTime);
+      g.gain.exponentialRampToValueAtTime(0.15, ctx.currentTime + 0.02);
+      g.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.5);
+      o.connect(g); g.connect(ctx.destination);
+      o.start(); o.stop(ctx.currentTime + 0.55);
+    }catch(e){}
+  }
+
+  function timeAgo(iso){
+    if(!iso) return '';
+    return new Date(iso).toLocaleTimeString('th-TH', {hour:'2-digit', minute:'2-digit'});
+  }
+
+  async function refresh(){
+    if (API_URL.includes('PASTE_YOUR')) return;
+    try{
+      const res = await fetch(`${API_URL}?action=status`);
+      const data = await res.json();
+      if (data.error){ console.error(data.error); return; }
+
+      document.getElementById('waitingCount').textContent = data.waitingCount ?? 0;
+
+      const calling = data.calling || [];
+      if (calling.length){
+        // most recently called = primary
+        calling.sort((a,b)=> new Date(b.calledAt) - new Date(a.calledAt));
+        const primary = calling[0];
+        const changed = primary.queue !== lastPrimaryQueue;
+        renderFlaps(primary.queue, changed);
+        document.getElementById('primaryCounter').textContent = primary.counter;
+
+        if (changed && lastPrimaryQueue !== null){
+          chime();
+          speak(primary.queue, primary.counter);
+        }
+        lastPrimaryQueue = primary.queue;
+
+        const others = calling.slice(1);
+        document.getElementById('otherCounters').innerHTML = others.map(c => `
+          <div class="counter-card">
+            <div class="c-label">ช่องบริการ ${c.counter}</div>
+            <div class="c-queue">${c.queue}</div>
+          </div>
+        `).join('');
+      } else {
+        renderFlaps('----', false);
+        document.getElementById('primaryCounter').textContent = '—';
+        document.getElementById('otherCounters').innerHTML = '';
+      }
+
+      const history = data.history || [];
+      document.getElementById('historyList').innerHTML = history.map(h => `
+        <li>
+          <span>${h.queue} · ช่อง ${h.counter}</span>
+          <span class="st">${timeAgo(h.calledAt)}</span>
+        </li>
+      `).join('') || '<li style="color:var(--muted); font-family:\'IBM Plex Sans Thai\',sans-serif;">ยังไม่มีการเรียกคิว</li>';
+
+    }catch(err){
+      console.error(err);
+    }
+  }
+
+  renderFlaps('----', false);
+  refresh();
+  setInterval(refresh, 4000);
+</script>
+</body>
+</html>

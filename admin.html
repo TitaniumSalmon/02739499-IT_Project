@@ -1,0 +1,267 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>แผงควบคุมเจ้าหน้าที่</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@600;700&family=IBM+Plex+Sans+Thai:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --bg:#F3F7F6;
+    --panel:#FFFFFF;
+    --teal:#0B6E6E;
+    --teal-dark:#084F4F;
+    --amber:#F2A93B;
+    --red:#C0473E;
+    --text:#14302D;
+    --muted:#5B7873;
+    --border:#DCE7E4;
+  }
+  *{box-sizing:border-box;}
+  body{
+    margin:0; background:var(--bg); color:var(--text);
+    font-family:'IBM Plex Sans Thai', sans-serif;
+    padding:28px;
+  }
+  .wrap{ max-width:920px; margin:0 auto; display:flex; flex-direction:column; gap:20px; }
+
+  h1{ font-size:22px; margin:0 0 2px; }
+  p.sub{ color:var(--muted); margin:0; font-size:14px; }
+
+  .row{ display:flex; gap:20px; flex-wrap:wrap; }
+
+  .panel{
+    background:var(--panel); border:1px solid var(--border); border-radius:18px;
+    padding:24px; flex:1; min-width:280px;
+  }
+  .panel h2{ font-size:15px; color:var(--muted); margin:0 0 14px; font-weight:600; }
+
+  label{ font-size:13px; color:var(--muted); display:block; margin-bottom:6px; }
+  select, input[type=text]{
+    width:100%; padding:12px 14px; border-radius:10px; border:1px solid var(--border);
+    font-family:'IBM Plex Sans Thai',sans-serif; font-size:15px; margin-bottom:16px;
+  }
+  select:focus-visible, input:focus-visible, button:focus-visible{
+    outline:3px solid var(--amber); outline-offset:2px;
+  }
+
+  .now{
+    display:flex; align-items:baseline; gap:14px; margin-bottom:18px;
+  }
+  .now .num{ font-family:'IBM Plex Mono',monospace; font-weight:700; font-size:48px; color:var(--teal-dark); }
+  .now .lbl{ color:var(--muted); font-size:14px; }
+
+  .btns{ display:grid; grid-template-columns:1fr 1fr; gap:10px; }
+  button{
+    padding:14px; border:none; border-radius:12px; font-weight:600; font-size:15px;
+    cursor:pointer; font-family:'IBM Plex Sans Thai',sans-serif; color:#fff;
+    transition: transform .1s ease, opacity .15s ease;
+  }
+  button:active{ transform:scale(.97); }
+  button:disabled{ opacity:.5; cursor:not-allowed; }
+  .b-next{ background:var(--teal); grid-column:1 / -1; padding:18px; font-size:17px; }
+  .b-next:hover{ background:var(--teal-dark); }
+  .b-recall{ background:#3E7C7C; }
+  .b-done{ background:#2E8B57; }
+  .b-skip{ background:var(--red); grid-column:1 / -1; }
+
+  .waiting-badge{
+    display:inline-flex; align-items:center; gap:8px;
+    background:#EAF6F2; color:var(--teal-dark); padding:8px 14px; border-radius:20px;
+    font-size:14px; font-weight:600;
+  }
+
+  table{ width:100%; border-collapse:collapse; font-size:14px; }
+  th, td{ text-align:left; padding:9px 8px; border-bottom:1px solid var(--border); }
+  th{ color:var(--muted); font-weight:600; font-size:12px; text-transform:uppercase; letter-spacing:.03em; }
+  td.qcode{ font-family:'IBM Plex Mono',monospace; font-weight:600; }
+  .status-pill{
+    display:inline-block; padding:2px 10px; border-radius:20px; font-size:12px;
+  }
+  .status-waiting{ background:#FFF3DE; color:#8A6416; }
+  .status-called{ background:#E4F3EF; color:var(--teal-dark); }
+  .status-done{ background:#E7F6EB; color:#2E7D4F; }
+  .status-skipped{ background:#FBEAEA; color:#A13E36; }
+
+  .msg{
+    font-size:13px; margin-top:10px; min-height:18px; color:var(--muted);
+  }
+  .msg.err{ color:var(--red); }
+
+  .config-row{ display:flex; gap:10px; align-items:flex-end; }
+  .config-row > div{ flex:1; }
+  .danger-btn{
+    background:transparent; border:1px solid var(--red); color:var(--red); font-weight:600;
+    padding:10px 14px; border-radius:10px; cursor:pointer; font-family:'IBM Plex Sans Thai',sans-serif;
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div>
+    <h1>แผงควบคุมเจ้าหน้าที่</h1>
+    <p class="sub">เลือกช่องบริการของคุณ แล้วเรียกคิวถัดไป</p>
+  </div>
+
+  <div class="row">
+    <div class="panel">
+      <h2>ช่องบริการของคุณ</h2>
+      <label for="counterInput">หมายเลขช่องบริการ</label>
+      <input type="text" id="counterInput" placeholder="เช่น 1, 2, A, B">
+
+      <div class="now">
+        <div class="num" id="currentQueue">—</div>
+        <div class="lbl">คิวที่กำลังให้บริการ</div>
+      </div>
+
+      <div class="btns">
+        <button class="b-next" id="btnNext">เรียกคิวถัดไป</button>
+        <button class="b-recall" id="btnRecall">เรียกซ้ำ</button>
+        <button class="b-done" id="btnDone">เสร็จสิ้น</button>
+        <button class="b-skip" id="btnSkip">ข้ามคิว / ไม่มาตามคิว</button>
+      </div>
+      <div class="msg" id="msg"></div>
+    </div>
+
+    <div class="panel">
+      <h2>ภาพรวมวันนี้</h2>
+      <span class="waiting-badge" id="waitingBadge">รอเรียก: 0 คิว</span>
+      <div style="margin-top:22px;">
+        <div class="config-row">
+          <div>
+            <label>ล้างคิวทั้งหมดของวันนี้</label>
+            <button class="danger-btn" id="btnReset">รีเซ็ตคิววันนี้</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="panel">
+    <h2>รายการคิวทั้งหมดวันนี้</h2>
+    <table>
+      <thead>
+        <tr><th>คิว</th><th>สถานะ</th><th>ช่อง</th><th>เวลาออกบัตร</th><th>เวลาเรียก</th></tr>
+      </thead>
+      <tbody id="tableBody"></tbody>
+    </table>
+  </div>
+</div>
+
+<script>
+  // ==== ตั้งค่า: วาง URL ของ Google Apps Script Web App ที่นี่ ====
+  const API_URL = "https://script.google.com/macros/s/AKfycbw348SVQh3Y8MfmMuP9uZFHTU3edTiN37cgMQ1Kk19qOFQLTafF6S8nr0lhv1zLRUB4/exec";
+
+  const counterInput = document.getElementById('counterInput');
+  const msg = document.getElementById('msg');
+
+  counterInput.value = localStorage.getItem('counter') || '';
+  counterInput.addEventListener('change', () => {
+    localStorage.setItem('counter', counterInput.value.trim());
+  });
+
+  function getCounter(){
+    const v = counterInput.value.trim();
+    if (!v) showMsg('กรุณาระบุหมายเลขช่องบริการก่อน', true);
+    return v;
+  }
+
+  function showMsg(text, isErr){
+    msg.textContent = text;
+    msg.className = 'msg' + (isErr ? ' err' : '');
+  }
+
+  async function call(action, params){
+    if (API_URL.includes('PASTE_YOUR')){
+      showMsg('ยังไม่ได้ตั้งค่า API_URL ในไฟล์นี้', true);
+      return null;
+    }
+    const qs = new URLSearchParams({ action, ...params }).toString();
+    const res = await fetch(`${API_URL}?${qs}`);
+    return res.json();
+  }
+
+  document.getElementById('btnNext').addEventListener('click', async () => {
+    const counter = getCounter(); if (!counter) return;
+    const data = await call('next', { counter });
+    if (!data) return;
+    if (data.error) showMsg(data.error, true);
+    else { showMsg(`เรียกคิว ${data.queue} แล้ว`); document.getElementById('currentQueue').textContent = data.queue; }
+    refresh();
+  });
+
+  document.getElementById('btnRecall').addEventListener('click', async () => {
+    const counter = getCounter(); if (!counter) return;
+    const data = await call('recall', { counter });
+    if (!data) return;
+    if (data.error) showMsg(data.error, true);
+    else showMsg(`เรียกซ้ำคิว ${data.queue}`);
+  });
+
+  document.getElementById('btnDone').addEventListener('click', async () => {
+    const counter = getCounter(); if (!counter) return;
+    const data = await call('done', { counter });
+    if (!data) return;
+    if (data.error) showMsg(data.error, true);
+    else { showMsg(`คิว ${data.queue} เสร็จสิ้น`); document.getElementById('currentQueue').textContent = '—'; }
+    refresh();
+  });
+
+  document.getElementById('btnSkip').addEventListener('click', async () => {
+    const counter = getCounter(); if (!counter) return;
+    const data = await call('skip', { counter });
+    if (!data) return;
+    if (data.error) showMsg(data.error, true);
+    else { showMsg(`ข้ามคิว ${data.queue} แล้ว`); document.getElementById('currentQueue').textContent = '—'; }
+    refresh();
+  });
+
+  document.getElementById('btnReset').addEventListener('click', async () => {
+    if (!confirm('ยืนยันการล้างคิวทั้งหมดของวันนี้? การกระทำนี้ย้อนกลับไม่ได้')) return;
+    const data = await call('resetDay', { confirm: 'yes' });
+    if (data && data.ok) { showMsg('ล้างคิวเรียบร้อย'); refresh(); }
+    else showMsg(data?.error || 'ล้างคิวไม่สำเร็จ', true);
+  });
+
+  function statusLabel(s){
+    return { waiting:'รอเรียก', called:'กำลังบริการ', done:'เสร็จสิ้น', skipped:'ข้ามคิว' }[s] || s;
+  }
+  function fmtTime(iso){
+    if (!iso) return '—';
+    return new Date(iso).toLocaleTimeString('th-TH', { hour:'2-digit', minute:'2-digit' });
+  }
+
+  async function refresh(){
+    if (API_URL.includes('PASTE_YOUR')) return;
+    try{
+      const status = await call('status', {});
+      if (status && !status.error){
+        document.getElementById('waitingBadge').textContent = `รอเรียก: ${status.waitingCount} คิว`;
+        const counter = counterInput.value.trim();
+        if (counter){
+          const mine = (status.calling || []).find(c => String(c.counter) === counter);
+          document.getElementById('currentQueue').textContent = mine ? mine.queue : '—';
+        }
+      }
+      const listRes = await call('queueList', {});
+      if (listRes && listRes.list){
+        const rows = listRes.list.slice().reverse().map(item => `
+          <tr>
+            <td class="qcode">${item.queue}</td>
+            <td><span class="status-pill status-${item.status}">${statusLabel(item.status)}</span></td>
+            <td>${item.counter || '—'}</td>
+            <td>${fmtTime(item.createdAt)}</td>
+            <td>${fmtTime(item.calledAt)}</td>
+          </tr>
+        `).join('');
+        document.getElementById('tableBody').innerHTML = rows || `<tr><td colspan="5" style="color:var(--muted)">ยังไม่มีคิววันนี้</td></tr>`;
+      }
+    }catch(e){ /* silent poll error */ }
+  }
+
+  refresh();
+  setInterval(refresh, 5000);
+</script>
+</body>
+</html>
