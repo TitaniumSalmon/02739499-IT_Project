@@ -1,0 +1,290 @@
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import { apiConfig, apiRequest, demoQueue } from './api.js';
+import generalQueueBg from './assets/queue-general-bg.png';
+import emergencyQueueBg from './assets/queue-emergency-bg.png';
+import reportClinic from './assets/report-clinic.png';
+import reportPdf from './assets/report-pdf.png';
+import reportExcel from './assets/report-excel.png';
+import reportCsv from './assets/report-csv.svg';
+import adminPerson from './assets/admin-person.svg';
+import adminAccount from './assets/admin-account.svg';
+import adminDashboard from './assets/admin-dashboard.svg';
+import adminReport from './assets/admin-report.svg';
+
+const CATEGORY = {
+  general: { label: 'ผู้ป่วยทั่วไป', description: 'รับบริการตามลำดับคิวปกติ', color: 'blue', icon: '▣' },
+  emergency: { label: 'อุบัติเหตุ', description: 'เจ้าหน้าที่สามารถจัดลำดับก่อนเมื่อจำเป็น', color: 'red', icon: '✚' },
+};
+
+function navigate(path) { window.location.hash = path; }
+
+function useHashRoute() {
+  const [route, setRoute] = useState(() => window.location.hash.replace(/^#/, '') || '/');
+  useEffect(() => {
+    const update = () => setRoute(window.location.hash.replace(/^#/, '') || '/');
+    window.addEventListener('hashchange', update);
+    return () => window.removeEventListener('hashchange', update);
+  }, []);
+  return route;
+}
+
+function useQueueData() {
+  const [queue, setQueue] = useState(() => apiConfig.configured ? null : demoQueue());
+  const [loading, setLoading] = useState(apiConfig.configured);
+  const [error, setError] = useState(apiConfig.configured ? '' : 'โหมดสาธิต · ตั้งค่า VITE_API_URL เพื่อเชื่อมต่อ Google Apps Script');
+  const refresh = useCallback(async () => {
+    if (!apiConfig.configured) return;
+    try { setLoading(true); setQueue(await apiRequest('getQueue')); setError(''); }
+    catch (err) { setError(err.message); setQueue(current => current || demoQueue()); }
+    finally { setLoading(false); }
+  }, []);
+  useEffect(() => {
+    refresh();
+    if (!apiConfig.configured) return undefined;
+    const timer = window.setInterval(refresh, 15000);
+    return () => window.clearInterval(timer);
+  }, [refresh]);
+  return { queue, setQueue, loading, error, refresh };
+}
+
+function Shell({ children, title = '', role = '', simple = false }) {
+  return <div className={`app-shell ${simple ? 'simple-shell' : ''}`}>
+    {!simple && <header className="topbar">
+      <button className="brand" onClick={() => navigate('/')}>QueueFlow</button>
+      <span className="topbar-title">{title}</span>
+      <span className="role-chip">{role}</span>
+    </header>}
+    {children}
+    {!simple && <footer className="footer"><strong>QueueFlow</strong><span>© 2024 QueueFlow Management Systems. All rights reserved.</span><nav><button onClick={() => navigate('/kiosk')}>Services</button><button onClick={() => navigate('/confirm')}>My Ticket</button><button>History</button></nav></footer>}
+  </div>;
+}
+
+function PlainDisplayShell({ children }) {
+  return <div className="app-shell plain-shell">{children}<footer className="footer"><strong>QueueFlow</strong><span>© 2024 QueueFlow Management Systems. All rights reserved.</span><nav><button onClick={() => navigate('/kiosk')}>Privacy Policy</button><button onClick={() => navigate('/operator')}>Terms of Service</button><button>Contact Support</button><button>About Us</button></nav></footer></div>;
+}
+
+function StatusBanner({ error }) { return error ? <div className="status-banner">{error}</div> : null; }
+
+function DisplayTicket({ ticket, empty = false }) {
+  if (empty) return <article className="display-ticket empty-ticket"><div className="display-number" /><div className="display-service" /></article>;
+  const category = CATEGORY[ticket.category] || CATEGORY.general;
+  return <article className={`display-ticket ${ticket.status === 'called' ? 'is-called' : ''}`}>
+    <div className="display-number">{ticket.ticketCode}</div>
+    <div className="display-service"><strong>{category.label}</strong><span>ช่องบริการหมายเลข 2</span></div>
+  </article>;
+}
+
+function PublicDisplay({ queueData }) {
+  const tickets = (queueData?.tickets || []).filter(t => ['waiting', 'called', 'serving'].includes(t.status));
+  const slots = [...tickets.slice(0, 8), ...Array(Math.max(0, 8 - tickets.length)).fill(null)];
+  return <PlainDisplayShell>
+    <section className="hero public-hero"><div className="hero-inner"><h1>ระบบจัดลำดับการใช้บริการสถานพยาบาล</h1><p>Kasetsart University Kampangsan Campus</p></div></section>
+    <main className="display-page"><div className="display-frame">{slots.map((ticket, index) => <DisplayTicket ticket={ticket} empty={!ticket} key={ticket?.id || `empty-${index}`} />)}</div></main>
+  </PlainDisplayShell>;
+}
+
+function Kiosk({ onCreate }) {
+  const [category, setCategory] = useState('');
+  const [phone, setPhone] = useState('');
+  const [created, setCreated] = useState(null);
+  const [busy, setBusy] = useState(false);
+  async function submit() {
+    if (!category) return;
+    setBusy(true);
+    try { setCreated(await onCreate(category, phone)); }
+    catch (err) { window.alert(err.message); }
+    finally { setBusy(false); }
+  }
+  if (created) return <YourQueue ticket={created} />;
+  return <Shell simple><div className="kiosk-screen">
+    <header className="kiosk-topbar"><span>Medical facility Kasetsart University Kamphaeng Saen Campus Medical Clinic</span><strong>From Admin</strong></header>
+    <main className="kiosk-content"><h1>Press the queue</h1><section className="kiosk-panel">
+      <div className="kiosk-panel-head"><strong>Select a category</strong><span>เลือกหมวดหมู่การรักษา</span></div>
+      <div className="kiosk-options">{Object.entries(CATEGORY).map(([key, item]) => <button key={key} className={`kiosk-option ${category === key ? 'selected' : ''}`} onClick={() => setCategory(key)}><span className="kiosk-icon">{item.icon}</span><strong>{item.label}</strong></button>)}</div>
+      <button className="kiosk-confirm" disabled={!category || busy} onClick={submit}>{busy ? 'กำลังออกคิว...' : 'ยืนยัน'}</button>
+      <p className="kiosk-note">คิวฉุกเฉินสามารถถูกจัดลำดับก่อนโดยเจ้าหน้าที่ และคิวที่ถูกข้ามจะถูกเรียกซ้ำภายหลัง</p>
+    </section></main>
+  </div></Shell>;
+}
+
+function YourQueue({ ticket }) {
+  const bg = ticket.category === 'emergency' ? emergencyQueueBg : generalQueueBg;
+  return <Shell simple><div className="your-queue-screen" style={{ '--queue-bg': `url(${bg})` }}>
+    <header className="kiosk-topbar"><span>Medical facility Kasetsart University Kamphaeng Saen Campus Medical Clinic</span><strong>From Admin</strong></header>
+    <main className="your-queue-content"><h1>Your Queue</h1><section className="your-queue-card"><div className="your-queue-meta"><span>วันที่ / เดือน / ปี</span><b>{CATEGORY[ticket.category]?.label}</b></div><strong className="your-queue-label">หมายเลขคิวของคุณ</strong><div className="your-queue-number">{ticket.ticketCode}</div><p>จำนวนคิวก่อนหน้า -</p><p>โปรดตั้งเสียงสัญญาณ และจดหมายเลขคิวของคุณจากจอ</p></section><button className="back-home" onClick={() => navigate('/')}>กลับหน้าจอหลัก</button></main>
+  </div></Shell>;
+}
+
+function ConfirmVisit() {
+  return <Shell title="My Ticket" role="ผู้รับบริการ"><main className="confirm-page"><div className="confirm-heading"><h1>Confirm Your Visit</h1><p>Review your selection and join the queue.</p></div><section className="confirm-card"><div className="confirm-category"><span>CATEGORY</span><h2>Financial Advising</h2><b>⌂</b></div><div className="confirm-stats"><div><span>◷<small>Wait Time</small></span><strong>~18 min</strong></div><div><span>♟<small>People Ahead</small></span><strong>4</strong></div></div><div className="confirm-body"><label>SMS Notifications (Optional)<input placeholder="+1 (555) 000-0000" /></label><p>We'll text you when it's almost your turn.</p><button className="confirm-primary" onClick={() => navigate('/kiosk')}>Confirm and Join Queue</button><button className="confirm-secondary" onClick={() => navigate('/kiosk')}>Select Different Service</button></div></section><p className="policy">By joining, you agree to our <u>Service Terms</u> and <u>Privacy Policy</u>. Data rates may apply for SMS.</p></main></Shell>;
+}
+
+function AdminQueueCard({ ticket, actions }) {
+  const category = CATEGORY[ticket.category] || CATEGORY.general;
+  return <article className="admin-queue-card"><span className="admin-category">{category.label}</span><div className="admin-ticket-number">{ticket.ticketCode}</div><div className="admin-card-actions"><button className="admin-call" onClick={() => actions.call(ticket)}>เรียกคิว</button><button className="admin-cancel" onClick={() => actions.cancel(ticket)}>ยกเลิก</button></div></article>;
+}
+
+function FigmaAdminNav({ active }) {
+  const item = (key, label, icon, path) => <button className={active === key ? 'is-active' : ''} onClick={() => navigate(path)}>
+    <img src={icon} alt="" />
+    <span>{label}</span>
+  </button>;
+  return <aside className="figma-admin-nav">
+    <div className="figma-admin-brand"><strong>Admin</strong><p>Medical facility Kasetsart University Kamphaeng Saen Campus Medical Clinic</p></div>
+    <nav>
+      {item('queue', 'Queue', adminPerson, '/operator')}
+      {item('dashboard', 'Dashboard', adminDashboard, '/dashboard')}
+      {item('report', 'Report', adminReport, '/report')}
+    </nav>
+  </aside>;
+}
+
+function FigmaAdminFrame({ active, title, children, action }) {
+  return <div className="figma-admin-shell">
+    <FigmaAdminNav active={active} />
+    <div className="figma-admin-workspace">
+      <header className="figma-admin-topbar"><strong>Admin</strong><img src={adminAccount} alt="Admin account" /></header>
+      <main className="figma-admin-main">
+        <div className="figma-admin-heading"><div><h1>{title}</h1><p>Medical facility Kasetsart University Kamphaeng Saen Campus Medical Clinic</p></div>{action}</div>
+        {children}
+      </main>
+    </div>
+  </div>;
+}
+
+function FigmaQueue({ queueData, actions, loading, error }) {
+  const source = queueData || demoQueue();
+  const all = source.tickets || [];
+  const active = all.filter(ticket => ['waiting', 'called', 'serving', 'skipped'].includes(ticket.status));
+  const current = source.current || active.find(ticket => ['called', 'serving'].includes(ticket.status)) || active[0];
+  const skipped = active.filter(ticket => ticket.status === 'skipped');
+  const upcoming = active.filter(ticket => ticket.id !== current?.id && ticket.status !== 'skipped').slice(0, 4);
+  const statusLabel = ticket => ticket.status === 'waiting' ? 'รอเรียก' : ticket.status === 'called' || ticket.status === 'serving' ? 'กำลังดำเนินการ' : 'ข้ามคิว';
+  return <FigmaAdminFrame active="queue" title="Call the queue number">
+    <StatusBanner error={error} />
+    <section className="figma-queue-layout">
+      <div className="figma-current-card">
+        <div className="figma-current-ticket">{current?.ticketCode || 'Q001'}</div>
+        <div className="figma-current-info"><strong>{CATEGORY[current?.category]?.label || 'ผู้ป่วยทั่วไป'}</strong><span>ช่องบริการหมายเลข 2</span></div>
+      </div>
+      <div className="figma-queue-actions">
+        <button className="queue-action next" disabled={loading} onClick={actions.callNext}>เรียกคิว</button>
+        <button className="queue-action done" disabled={!current} onClick={() => current && actions.complete(current)}>เสร็จสิ้น <span>✓</span></button>
+        <button className="queue-action recall" disabled={!skipped[0]} onClick={() => skipped[0] && actions.recall(skipped[0])}>เรียกคิวซ้ำ <span>↻</span></button>
+      </div>
+      <section className="figma-upcoming-card">
+        <header><strong>Upcoming Queue</strong><span>สถานะ</span><span>แก้ไข</span></header>
+        {upcoming.map(ticket => <div className="figma-upcoming-row" key={ticket.id}>
+          <strong>{ticket.ticketCode}</strong><span>ช่องบริการหมายเลข 1</span><em className={`status-${ticket.status}`}>{statusLabel(ticket)}</em><button onClick={() => actions.cancel(ticket)}>ลบคิว</button>
+        </div>)}
+        {!upcoming.length && <div className="figma-upcoming-empty">ไม่มีคิวถัดไป</div>}
+      </section>
+    </section>
+  </FigmaAdminFrame>;
+}
+
+function FigmaDashboard({ queueData, loading, error }) {
+  const [metrics, setMetrics] = useState(null);
+  useEffect(() => { if (apiConfig.configured) apiRequest('getDashboard').then(setMetrics).catch(() => {}); }, []);
+  const all = queueData?.tickets || [];
+  const total = metrics?.total ?? (all.length || 12387);
+  const averageWait = metrics?.averageWaitMinutes || 15;
+  const averageService = metrics?.averageServiceMinutes || 28;
+  const bars = [
+    { label: 'เวชระเบียน', users: 116, minutes: 82 },
+    { label: 'คัดกรอง', users: 124, minutes: 70 },
+    { label: 'พบแพทย์', users: 132, minutes: 100 },
+    { label: 'ทำแผล', users: 84, minutes: 70 },
+    { label: 'รับยา', users: 96, minutes: 35 },
+  ];
+  return <FigmaAdminFrame active="dashboard" title="Dashboard" action={<button className="figma-export" onClick={() => navigate('/report')}>ส่งออกรายงาน <span>↥</span></button>}>
+    <StatusBanner error={error} />
+    <section className="figma-dashboard-layout">
+      <div className="figma-chart-card">
+        <h2>ระยะเวลา และ ปริมาณผู้เข้าใช้บริการในแต่ละจุดบริการ</h2>
+        <div className="figma-chart-toolbar"><span>เดือน มิถุนายน⌄</span><div><i className="legend-users" />ผู้รับบริการ <i className="legend-time" />ระยะเวลา (นาที)</div></div>
+        <div className="figma-bars">{bars.map(bar => <div className="figma-bar-group" key={bar.label}><div className="figma-bar-pair"><span className="bar-users" style={{ height: `${bar.users}%` }} /><span className="bar-time" style={{ height: `${bar.minutes}%` }} /></div><strong>{bar.label}</strong></div>)}</div>
+      </div>
+      <div className="figma-peak-card"><h2>ช่วงเวลาที่หนาแน่น</h2>{['8:00', '9:00', '10:00', '11:00', '12:00', '13:00', '14:00', '15:00', '16:00', '17:00', '18:00', '19:00'].map((time, index) => <div className="peak-row" key={time}><span>{time}</span><i style={{ opacity: 0.35 + ((index % 5) * 0.13) }} /></div>)}</div>
+      <div className="figma-stat-card"><span>จำนวนผู้เข้าใช้บริการ</span><strong>{Number(total).toLocaleString()}</strong></div>
+      <div className="figma-stat-card"><span>ระยะเวลาการรอเฉลี่ย</span><strong>{averageWait}<small> นาที</small></strong></div>
+      <div className="figma-stat-card"><span>ระยะเวลาการให้บริการ</span><strong>{averageService}<small> นาที</small></strong></div>
+    </section>
+    <p className="figma-data-note">{loading ? 'กำลังโหลดข้อมูล...' : 'ข้อมูลอัปเดตจาก Google Sheets ผ่าน Apps Script'}</p>
+  </FigmaAdminFrame>;
+}
+
+function FigmaReport({ queueData, error }) {
+  const [reportType, setReportType] = useState('overview');
+  const [range, setRange] = useState('today');
+  const [format, setFormat] = useState('PDF');
+  function exportReport() {
+    if (format === 'CSV') {
+      const rows = [['ticketCode', 'category', 'status', 'issuedAt'], ...(queueData?.tickets || []).map(ticket => [ticket.ticketCode, ticket.category, ticket.status, ticket.issuedAt])];
+      const blob = new Blob([rows.map(row => row.map(value => `"${String(value ?? '').replaceAll('"', '""')}"`).join(',')).join('\n')], { type: 'text/csv;charset=utf-8' });
+      const url = URL.createObjectURL(blob); const link = document.createElement('a'); link.href = url; link.download = `queueflow-${range}.csv`; link.click(); URL.revokeObjectURL(url); return;
+    }
+    window.alert(`เตรียมสร้างรายงาน ${format} (${reportType === 'overview' ? 'สรุปภาพรวมการใช้บริการ' : 'รายละเอียดส่วนบุคคล'})`);
+  }
+  const reportCard = (key, title, text) => <button className={`report-type-card ${reportType === key ? 'selected' : ''}`} onClick={() => setReportType(key)}><strong>{title}</strong><span>{text}</span><b>✓</b></button>;
+  const rangeButton = (key, label) => <button className={range === key ? 'selected' : ''} onClick={() => setRange(key)}>{label}</button>;
+  const fileCard = (key, label, image) => <button className={`report-file-card ${format === key ? 'selected' : ''}`} onClick={() => setFormat(key)}><img src={image} alt="" /><strong>{label}</strong></button>;
+  return <FigmaAdminFrame active="report" title="Report"><StatusBanner error={error} /><section className="figma-report-layout">
+    <div className="figma-report-main">
+      <section className="report-section report-type"><div className="report-section-heading"><h2>ประเภทรายงาน</h2><span>เดือน มิถุนายน⌄</span></div><div className="report-type-grid">{reportCard('overview', 'สรุปภาพรวมการใช้บริการ', 'สถิติการเข้าใช้บริการ และ ระยะเวลาเฉลี่ยรายวัน')}{reportCard('personal', 'รายละเอียดส่วนบุคคล', 'ประวัติการเข้าใช้สถานพยาบาล พร้อมคำวินิจฉัยเบื้องต้น')}</div></section>
+      <section className="report-section report-options"><h2>ช่วงเวลาของข้อมูล</h2><div className="report-pills">{rangeButton('today', 'วันนี้')}{rangeButton('week', '7 วันที่ผ่านมา')}{rangeButton('month', 'รายเดือน')}</div><h2>รูปแบบไฟล์</h2><div className="report-file-grid">{fileCard('PDF', 'PDF', reportPdf)}{fileCard('Excel', 'Excel', reportExcel)}{fileCard('CSV', 'CSV', reportCsv)}</div><button className="report-download" onClick={exportReport}>ดาวน์โหลดรายงาน</button></section>
+    </div>
+    <img className="report-clinic-image" src={reportClinic} alt="Medical clinic" />
+  </section></FigmaAdminFrame>;
+}
+
+function Operator({ queueData, actions, loading, error }) {
+  const all = queueData?.tickets || [];
+  const active = all.filter(t => ['waiting', 'called', 'serving'].includes(t.status));
+  const skipped = all.filter(t => t.status === 'skipped');
+  return <PlainDisplayShell><section className="hero admin-hero"><div className="hero-inner"><h1>ระบบจัดลำดับการใช้บริการสถานพยาบาล</h1><p>Kasetsart University Kampangsan Campus</p></div></section><main className="admin-page"><StatusBanner error={error} /><div className="admin-toolbar"><span>คิววันนี้ · {active.length + skipped.length} รายการ</span><button className="button primary" disabled={loading} onClick={actions.callNext}>เรียกคิวถัดไป</button></div><div className="admin-grid">{active.map(ticket => <AdminQueueCard key={ticket.id} ticket={ticket} actions={actions} />)}</div>{skipped.length > 0 && <section className="skipped-panel"><h2>คิวที่ถูกข้าม · เรียกซ้ำภายหลัง</h2><div className="skipped-list">{skipped.map(ticket => <div key={ticket.id}><strong>{ticket.ticketCode}</strong><span>{CATEGORY[ticket.category]?.label}</span><button className="button secondary small" onClick={() => actions.recall(ticket)}>เรียกซ้ำ</button></div>)}</div></section>}</main></PlainDisplayShell>;
+}
+
+function Metric({ label, value, tone = '' }) { return <div className={`metric ${tone}`}><span>{label}</span><strong>{value}</strong></div>; }
+
+function Dashboard({ queueData, loading, error }) {
+  const [metrics, setMetrics] = useState(null);
+  useEffect(() => { if (apiConfig.configured) apiRequest('getDashboard').then(setMetrics).catch(() => {}); }, []);
+  const all = queueData?.tickets || [];
+  const values = metrics || { waiting: all.filter(t => t.status === 'waiting').length, completed: all.filter(t => t.status === 'completed').length, skipped: all.filter(t => t.status === 'skipped').length, emergency: all.filter(t => t.category === 'emergency').length };
+  return <Shell title="Dashboard" role="Admin"><main className="backoffice-page"><aside className="side-nav"><strong>HealthFlow<br />Admin</strong><button className="active">▦ Dashboard</button><button onClick={() => navigate('/operator')}>▤ Live Queue</button><button>⌖ Service Zones</button><button>♙ Staffing</button><button>⇄ Patient Flow</button><button>▤ Reports</button><div /><button>◌ Support</button><button onClick={() => navigate('/')}>↪ Sign Out</button></aside><section className="backoffice-content"><StatusBanner error={error} /><div className="backoffice-heading"><div><span className="eyebrow">HEALTHFLOW ADMIN</span><h1>Dashboard</h1><p>Medical facility Kasetsart University Kampangsan Saen Medical Clinic</p></div><button className="button primary">ส่งออกรายงาน</button></div><div className="metric-grid"><Metric label="จำนวนผู้ใช้บริการรวม" value={values.total ?? values.waiting + values.completed} /><Metric label="เวลารอเฉลี่ย" value="12 นาที" tone="amber" /><Metric label="คิวฉุกเฉิน" value={values.emergency} tone="red" /><Metric label="เสร็จสิ้นวันนี้" value={values.completed} tone="green" /></div><section className="dashboard-card modern-chart"><h2>ปริมาณผู้รับบริการ และ ระยะเวลาเฉลี่ยตามจุดบริการ</h2><div className="fake-chart">{[42,68,50,84,58,36,61].map((height, i) => <span key={i} style={{ height: `${height}%` }} />)}</div></section><section className="dashboard-card efficiency"><h2>ตารางประสิทธิภาพสถานีบริการ</h2>{['Registration', 'Screening', 'Triage', 'Doctor Visit', 'Pharmacy'].map((name, i) => <div key={name}><b>{i + 1}. {name}</b><span>{240 - i * 17} คน</span><span>{(3.2 + i * 1.7).toFixed(1)} นาที</span><em className={i === 3 ? 'busy' : ''}>{i === 3 ? 'Bottleneck' : 'Optimal'}</em></div>)}</section><p className="tiny">{loading ? 'กำลังโหลดข้อมูล...' : 'ข้อมูลอัปเดตจาก Google Sheets ผ่าน Apps Script'}</p></section></main></Shell>;
+}
+
+function App() {
+  const route = useHashRoute();
+  const { queue, setQueue, loading, error } = useQueueData();
+  const mutate = useCallback(async (action, payload, localUpdate) => {
+    if (apiConfig.configured) { const data = await apiRequest(action, payload); setQueue(data.queue || data); return data.ticket || data; }
+    const result = localUpdate?.(queue || demoQueue()) || {};
+    setQueue(result.queue || result);
+    return result.ticket || result;
+  }, [queue, setQueue]);
+  const createTicket = useCallback((category, phone) => mutate('createTicket', { category, phone }, prev => {
+    const n = prev.tickets.length + 1;
+    const ticket = { id: `demo-${Date.now()}`, ticketCode: `Q${String(n).padStart(3, '0')}`, category, categoryLabel: CATEGORY[category].label, priority: category === 'emergency' ? 100 : 10, status: 'waiting', sequenceNo: n, issuedAt: new Date().toISOString(), phone };
+    return { queue: { ...prev, tickets: [...prev.tickets, ticket] }, ticket };
+  }), [mutate]);
+  const ticketAction = useCallback((action, ticket) => mutate(action, { ticketId: ticket.id }, prev => {
+    const nextStatus = { callTicket: 'called', skipTicket: 'skipped', recallTicket: 'called', completeTicket: 'completed', cancelTicket: 'cancelled' }[action];
+    return { queue: { ...prev, tickets: prev.tickets.map(item => item.id === ticket.id ? { ...item, status: nextStatus } : item) } };
+  }), [mutate]);
+  const actions = useMemo(() => ({
+    callNext: () => mutate('callNext', {}, prev => { const next = prev.tickets.find(t => t.status === 'waiting' && t.category === 'emergency') || prev.tickets.find(t => t.status === 'waiting'); return { queue: { ...prev, tickets: prev.tickets.map(item => item.id === next?.id ? { ...item, status: 'called' } : item) } }; }),
+    call: ticket => ticketAction('callTicket', ticket), skip: ticket => ticketAction('skipTicket', ticket), recall: ticket => ticketAction('recallTicket', ticket), complete: ticket => ticketAction('completeTicket', ticket), cancel: ticket => ticketAction('cancelTicket', ticket),
+  }), [mutate, ticketAction]);
+  if (route === '/kiosk') return <Kiosk onCreate={createTicket} />;
+  if (route === '/confirm') return <ConfirmVisit />;
+  if (route === '/ticket/general') return <YourQueue ticket={{ ticketCode: 'Q001', category: 'general' }} />;
+  if (route === '/ticket/emergency') return <YourQueue ticket={{ ticketCode: 'Q001', category: 'emergency' }} />;
+  if (route === '/operator' || route === '/admin-queue') return <FigmaQueue queueData={queue} actions={actions} loading={loading} error={error} />;
+  if (route === '/dashboard') return <FigmaDashboard queueData={queue} loading={loading} error={error} />;
+  if (route === '/report') return <FigmaReport queueData={queue} error={error} />;
+  return <PublicDisplay queueData={queue} />;
+}
+
+export default App;
