@@ -1,19 +1,19 @@
 {
-  "hash": "3fab02f8",
-  "configHash": "60004f09",
-  "lockfileHash": "bbe7e59c",
-  "browserHash": "42a1a707",
+  "hash": "3421ab8a",
+  "configHash": "256e90b3",
+  "lockfileHash": "ef9ce58d",
+  "browserHash": "125bc079",
   "optimized": {
     "react": {
       "src": "../../node_modules/.pnpm/react@18.3.1/node_modules/react/index.js",
       "file": "react.js",
-      "fileHash": "b7b52916",
+      "fileHash": "c2729951",
       "needsInterop": true
     },
     "react-dom/client": {
       "src": "../../node_modules/.pnpm/react-dom@18.3.1_react@18.3.1/node_modules/react-dom/client.js",
       "file": "react-dom_client.js",
-      "fileHash": "524c6427",
+      "fileHash": "bc311429",
       "needsInterop": true
     }
   },

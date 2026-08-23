@@ -145,16 +145,25 @@ function transitionTicket_(ticketId, nextStatus, eventType, allowedStatuses, pay
 
 function queueSnapshot_() {
   const today = dateKey_();
-  const tickets = readRecords_(SHEETS.TICKETS).filter(function(row) {
-    return row.businessDate === today && ACTIVE_STATUSES.indexOf(row.status) !== -1;
+  const allToday = readRecords_(SHEETS.TICKETS).filter(function(row) {
+    return row.businessDate === today;
+  });
+  const tickets = allToday.filter(function(row) {
+    return ACTIVE_STATUSES.indexOf(row.status) !== -1;
   });
   const sorted = tickets.slice().sort(queueComparator_);
+  const history = allToday.filter(function(row) {
+    return Boolean(row.calledAt);
+  }).sort(function(a, b) {
+    return new Date(b.calledAt).getTime() - new Date(a.calledAt).getTime();
+  }).slice(0, 20);
   return {
     date: today,
     tickets: sorted,
     current: sorted.find(function(row) { return row.status === 'called' || row.status === 'serving'; }) || null,
     waiting: sorted.filter(function(row) { return row.status === 'waiting'; }),
     skipped: sorted.filter(function(row) { return row.status === 'skipped'; }),
+    history: history,
   };
 }
 

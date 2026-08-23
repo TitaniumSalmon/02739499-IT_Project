@@ -10,6 +10,7 @@ import adminPerson from './assets/admin-person.svg';
 import adminAccount from './assets/admin-account.svg';
 import adminDashboard from './assets/admin-dashboard.svg';
 import adminReport from './assets/admin-report.svg';
+import queueAlarm from './assets/queue-alarm.svg';
 
 const CATEGORY = {
   general: { label: 'ผู้ป่วยทั่วไป', description: 'รับบริการตามลำดับคิวปกติ', color: 'blue', icon: '▣' },
@@ -74,13 +75,75 @@ function DisplayTicket({ ticket, empty = false }) {
   </article>;
 }
 
-function PublicDisplay({ queueData }) {
-  const tickets = (queueData?.tickets || []).filter(t => ['waiting', 'called', 'serving'].includes(t.status));
-  const slots = [...tickets.slice(0, 8), ...Array(Math.max(0, 8 - tickets.length)).fill(null)];
-  return <PlainDisplayShell>
-    <section className="hero public-hero"><div className="hero-inner"><h1>ระบบจัดลำดับการใช้บริการสถานพยาบาล</h1><p>Kasetsart University Kampangsan Campus</p></div></section>
-    <main className="display-page"><div className="display-frame">{slots.map((ticket, index) => <DisplayTicket ticket={ticket} empty={!ticket} key={ticket?.id || `empty-${index}`} />)}</div></main>
-  </PlainDisplayShell>;
+function QueueDisplay({ queueData }) {
+  const source = queueData || demoQueue();
+  const tickets = source.tickets || [];
+  const active = tickets.filter(ticket => ['waiting', 'called', 'serving', 'skipped'].includes(ticket.status));
+  const called = active
+    .filter(ticket => ['called', 'serving'].includes(ticket.status))
+    .sort((a, b) => new Date(b.calledAt || b.updatedAt || 0) - new Date(a.calledAt || a.updatedAt || 0));
+  const demoCurrent = {
+    general: { ticketCode: 'Q067', category: 'general' },
+    emergency: { ticketCode: 'Q071', category: 'emergency' },
+  };
+  const latestFor = category => called.find(ticket => ticket.category === category)
+    || (apiConfig.configured ? { ticketCode: '—', category } : demoCurrent[category]);
+  const general = latestFor('general');
+  const emergency = latestFor('emergency');
+  const upcoming = active
+    .filter(ticket => ticket.id !== general.id && ticket.id !== emergency.id && ticket.status !== 'skipped')
+    .sort((a, b) => (Number(a.sequenceNo) || 0) - (Number(b.sequenceNo) || 0))
+    .slice(0, 4);
+  const history = (source.history || (apiConfig.configured
+    ? called.filter(ticket => ticket !== general && ticket !== emergency)
+    : [{ id: 'demo-history-1', ticketCode: 'Q068', counter: 3 }, { id: 'demo-history-2', ticketCode: 'Q069', counter: 4 }, { id: 'demo-history-3', ticketCode: 'Q070', counter: 5 }]))
+    .filter(ticket => ticket.id !== general.id && ticket.id !== emergency.id)
+    .slice(0, 3);
+  const displayTime = new Intl.DateTimeFormat('th-TH', { hour: '2-digit', minute: '2-digit', hour12: false }).format(new Date());
+  const categoryLabel = ticket => CATEGORY[ticket.category]?.label || ticket.categoryLabel || 'ผู้ป่วยทั่วไป';
+  return <div className="queue-display-shell">
+    <header className="queue-display-header">
+      <div>
+        <h1>Call the queue number</h1>
+        <p>Medical facility Kasetsart University Kamphaeng Saen Campus Medical Clinic</p>
+      </div>
+      <div className="queue-display-header-actions">
+        <nav className="queue-display-nav" aria-label="เมนูหลัก">
+          <button onClick={() => navigate('/operator')}>จัดการคิว</button>
+          <button onClick={() => navigate('/dashboard')}>Dashboard</button>
+          <button onClick={() => navigate('/report')}>รายงาน</button>
+          <button onClick={() => navigate('/kiosk')}>รับบัตรคิว</button>
+          <button onClick={() => navigate('/confirm')}>ตรวจสอบคิว</button>
+        </nav>
+        <button className="queue-display-admin" onClick={() => navigate('/operator')} aria-label="เปิดหน้าจัดการคิว"><strong>Admin</strong><img src={adminAccount} alt="Admin account" /></button>
+      </div>
+    </header>
+    <main className="queue-display-main">
+      <section className="queue-display-current-grid">
+        {[general, emergency].map(ticket => <article className="queue-display-current" key={ticket.category}>
+          <div className="queue-display-number">{ticket.ticketCode}</div>
+          <div className="queue-display-current-copy"><strong>{categoryLabel(ticket)}</strong><span>ช่องบริการหมายเลข {ticket.category === 'emergency' ? '7' : '3'}</span></div>
+        </article>)}
+      </section>
+      <aside className="queue-display-history">
+        <h2>คิวที่เรียกไปแล้ว</h2>
+        <div className="queue-display-history-list">
+          {history.map((ticket, index) => <div className="queue-display-history-row" key={ticket.id || `${ticket.ticketCode}-${index}`}><strong>{ticket.ticketCode}</strong><span>ช่องบริการหมายเลข {ticket.counter || (index + 3)}</span></div>)}
+          {!history.length && <div className="queue-display-history-empty">ยังไม่มีประวัติการเรียกคิว</div>}
+        </div>
+        <div className="queue-display-clock"><img src={queueAlarm} alt="" />{displayTime} น.</div>
+      </aside>
+      <section className="queue-display-upcoming">
+        <header><h2>Upcoming Queue</h2><strong>สถานะ</strong></header>
+        <div className="queue-display-upcoming-list">
+          {upcoming.map(ticket => <div className="queue-display-upcoming-row" key={ticket.id}>
+            <strong>{ticket.ticketCode}</strong><span>ช่องบริการหมายเลข {ticket.counter || '1'}</span><em>{ticket.status === 'skipped' ? 'ข้ามคิว' : 'กำลังดำเนินการ'}</em>
+          </div>)}
+          {!upcoming.length && <div className="queue-display-history-empty">ไม่มีคิวถัดไป</div>}
+        </div>
+      </section>
+    </main>
+  </div>;
 }
 
 function Kiosk({ onCreate }) {
@@ -284,7 +347,7 @@ function App() {
   if (route === '/operator' || route === '/admin-queue') return <FigmaQueue queueData={queue} actions={actions} loading={loading} error={error} />;
   if (route === '/dashboard') return <FigmaDashboard queueData={queue} loading={loading} error={error} />;
   if (route === '/report') return <FigmaReport queueData={queue} error={error} />;
-  return <PublicDisplay queueData={queue} />;
+  return <QueueDisplay queueData={queue} />;
 }
 
 export default App;
