@@ -7,14 +7,25 @@ export const apiConfig = {
 
 export async function apiRequest(action, payload = {}) {
   if (!API_URL) throw new Error('ยังไม่ได้ตั้งค่า VITE_API_URL');
-  const response = await fetch(API_URL, {
-    method: 'POST',
-    headers: { 'Content-Type': 'text/plain;charset=utf-8' },
-    body: JSON.stringify({ action, payload }),
-  });
-  const body = await response.json();
-  if (!body.ok) throw new Error(body.error || 'เกิดข้อผิดพลาดจาก API');
-  return body.data;
+  const controller = new AbortController();
+  const timeout = window.setTimeout(() => controller.abort(), 20000);
+  try {
+    const response = await fetch(API_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+      body: JSON.stringify({ action, payload }),
+      signal: controller.signal,
+    });
+    let body;
+    try { body = await response.json(); } catch (error) { throw new Error('API ส่งข้อมูลกลับมาไม่ถูกต้อง'); }
+    if (!response.ok || !body?.ok) throw new Error(body?.error || `API ตอบกลับด้วยสถานะ ${response.status}`);
+    return body.data;
+  } catch (error) {
+    if (error.name === 'AbortError') throw new Error('API ใช้เวลานานเกินไป กรุณาลองใหม่');
+    throw error;
+  } finally {
+    window.clearTimeout(timeout);
+  }
 }
 
 export function demoQueue() {

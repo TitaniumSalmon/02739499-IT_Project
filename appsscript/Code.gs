@@ -64,6 +64,42 @@ function setSpreadsheetId(spreadsheetId) {
   return { spreadsheetId: spreadsheetId };
 }
 
+/**
+ * One-time repair helper for older rows that were issued as Q001 because the
+ * Sheets date column was auto-converted to a Date value. Run this manually
+ * from the Apps Script editor after deploying the new code if existing rows
+ * for today also need their sequence numbers corrected.
+ */
+function repairTicketSequences(businessDate) {
+  return withLock_(function() {
+    const targetDate = normalizeBusinessDate_(businessDate || dateKey_());
+    const sheet = getSpreadsheet_().getSheetByName(SHEETS.TICKETS);
+    if (!sheet || sheet.getLastRow() < 2) return { businessDate: targetDate, updated: 0 };
+    const values = sheet.getDataRange().getValues();
+    const headers = values[0].map(String);
+    const dateIndex = headers.indexOf('businessDate');
+    const sequenceIndex = headers.indexOf('sequenceNo');
+    const codeIndex = headers.indexOf('ticketCode');
+    const issuedIndex = headers.indexOf('issuedAt');
+    if (dateIndex < 0 || sequenceIndex < 0 || codeIndex < 0) throw new Error('Tickets sheet ไม่มีคอลัมน์ที่จำเป็น');
+    const rows = [];
+    for (let index = 1; index < values.length; index += 1) {
+      if (normalizeBusinessDate_(values[index][dateIndex]) !== targetDate) continue;
+      rows.push({
+        sheetRow: index + 1,
+        issuedAt: issuedIndex >= 0 ? new Date(values[index][issuedIndex]).getTime() || 0 : 0,
+      });
+    }
+    rows.sort(function(a, b) { return a.issuedAt - b.issuedAt || a.sheetRow - b.sheetRow; });
+    rows.forEach(function(row, index) {
+      const sequenceNo = index + 1;
+      sheet.getRange(row.sheetRow, sequenceIndex + 1).setValue(sequenceNo);
+      sheet.getRange(row.sheetRow, codeIndex + 1).setValue('Q' + String(sequenceNo).padStart(3, '0'));
+    });
+    return { businessDate: targetDate, updated: rows.length };
+  });
+}
+
 function handle_(action, payload) {
   switch (action) {
     case 'health': return { service: 'queueflow-api', now: now_() };
@@ -118,8 +154,15 @@ function createTicket_(payload) {
 }
 
 function callNext_(payload) {
-  const tickets = readRecords_(SHEETS.TICKETS).filter(function(row) {
-    return row.businessDate === dateKey_() && row.status === 'waiting';
+  const today = dateKey_();
+  const allToday = readRecords_(SHEETS.TICKETS).filter(function(row) {
+    return row.businessDate === today;
+  });
+  if (allToday.some(function(row) { return row.status === 'called' || row.status === 'serving'; })) {
+    throw new Error('มีคิวที่กำลังให้บริการอยู่ กรุณาเสร็จสิ้นหรือข้ามคิวก่อน');
+  }
+  const tickets = allToday.filter(function(row) {
+    return row.status === 'waiting';
   });
   tickets.sort(queueComparator_);
   if (!tickets.length) throw new Error('ไม่มีคิวที่รอเรียก');
@@ -137,7 +180,11 @@ function transitionTicket_(ticketId, nextStatus, eventType, allowedStatuses, pay
   if (nextStatus === 'called') ticket.calledAt = timestamp;
   if (nextStatus === 'serving') ticket.servingAt = timestamp;
   if (nextStatus === 'completed') ticket.completedAt = timestamp;
-  if (nextStatus === 'skipped') ticket.skippedAt = timestamp;
+  if (nextStatus === 'skipped') {
+    ticket.skippedAt = timestamp;
+    ticket.servingAt = '';
+  }
+  if (nextStatus === 'called' && current === 'skipped') ticket.servingAt = '';
   updateRecord_(found, SHEETS.TICKETS, TICKET_HEADERS, ticket);
   appendEvent_(ticket, eventType, current, nextStatus, payload || {});
   return { ticket: ticket, queue: queueSnapshot_() };
@@ -187,6 +234,9 @@ function dashboard_() {
 }
 
 function queueComparator_(a, b) {
+  const statusRank = { called: 0, serving: 0, waiting: 1, skipped: 2 };
+  const rankDifference = (statusRank[a.status] === undefined ? 3 : statusRank[a.status]) - (statusRank[b.status] === undefined ? 3 : statusRank[b.status]);
+  if (rankDifference !== 0) return rankDifference;
   const priority = (Number(b.priority) || 0) - (Number(a.priority) || 0);
   if (priority !== 0 && a.status === 'waiting' && b.status === 'waiting') return priority;
   return (Number(a.sequenceNo) || 0) - (Number(b.sequenceNo) || 0);
@@ -230,7 +280,12 @@ function readRecords_(sheetName) {
   const values = sheet.getDataRange().getValues();
   const headers = values.shift().map(String);
   return values.filter(function(row) { return row.some(function(value) { return value !== ''; }); }).map(function(row) {
-    return headers.reduce(function(record, header, index) { record[header] = row[index] === null ? '' : String(row[index]); return record; }, {});
+    return headers.reduce(function(record, header, index) {
+      record[header] = header === 'businessDate'
+        ? normalizeBusinessDate_(row[index])
+        : (row[index] === null || row[index] === undefined ? '' : String(row[index]));
+      return record;
+    }, {});
   });
 }
 
@@ -242,7 +297,12 @@ function findRecord_(sheetName, id) {
   const idIndex = headers.indexOf('id');
   for (let index = 1; index < values.length; index += 1) {
     if (String(values[index][idIndex]) === String(id)) {
-      const record = headers.reduce(function(result, header, column) { result[header] = values[index][column] === null ? '' : String(values[index][column]); return result; }, {});
+      const record = headers.reduce(function(result, header, column) {
+        result[header] = header === 'businessDate'
+          ? normalizeBusinessDate_(values[index][column])
+          : (values[index][column] === null || values[index][column] === undefined ? '' : String(values[index][column]));
+        return result;
+      }, {});
       return { sheet: sheet, row: index + 1, headers: headers, record: record };
     }
   }
@@ -261,5 +321,16 @@ function updateRecord_(found, sheetName, headers, record) {
 function dateKey_() { return Utilities.formatDate(new Date(), Session.getScriptTimeZone() || 'Asia/Bangkok', 'yyyy-MM-dd'); }
 function now_() { return new Date().toISOString(); }
 function diffMinutes_(start, end) { return Math.max(0, (new Date(end).getTime() - new Date(start).getTime()) / 60000); }
+function normalizeBusinessDate_(value) {
+  if (value === null || value === undefined || value === '') return '';
+  const timezone = Session.getScriptTimeZone() || 'Asia/Bangkok';
+  if (Object.prototype.toString.call(value) === '[object Date]' && !isNaN(value.getTime())) return Utilities.formatDate(value, timezone, 'yyyy-MM-dd');
+  if (typeof value === 'number' && isFinite(value)) return Utilities.formatDate(new Date(Date.UTC(1899, 11, 30) + value * 86400000), timezone, 'yyyy-MM-dd');
+  const text = String(value).trim();
+  const isoDate = text.match(/^(\d{4}-\d{2}-\d{2})/);
+  if (isoDate) return isoDate[1];
+  const parsed = new Date(text);
+  return isNaN(parsed.getTime()) ? text : Utilities.formatDate(parsed, timezone, 'yyyy-MM-dd');
+}
 function parseJson_(value) { try { return typeof value === 'string' ? JSON.parse(value || '{}') : (value || {}); } catch (error) { return {}; } }
 function json_(value) { return ContentService.createTextOutput(JSON.stringify(value)).setMimeType(ContentService.MimeType.JSON); }

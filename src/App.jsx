@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { apiConfig, apiRequest, demoQueue } from './api.js';
 import generalQueueBg from './assets/queue-general-bg.png';
 import emergencyQueueBg from './assets/queue-emergency-bg.png';
@@ -17,7 +17,17 @@ const CATEGORY = {
   emergency: { label: 'อุบัติเหตุ', description: 'เจ้าหน้าที่สามารถจัดลำดับก่อนเมื่อจำเป็น', color: 'red', icon: '✚' },
 };
 
-function navigate(path) { window.location.hash = path; }
+function navigate(path) {
+  const nextHash = `#${path}`;
+  if (window.location.hash === nextHash) {
+    // A guarded deep link (for example /#/operator) may already have this
+    // hash while showing Login. Notify the hash-route hook so it re-checks
+    // the newly established session immediately after sign-in.
+    window.dispatchEvent(new Event('hashchange'));
+    return;
+  }
+  window.location.hash = path;
+}
 
 function useHashRoute() {
   const [route, setRoute] = useState(() => window.location.hash.replace(/^#/, '') || '/');
@@ -32,12 +42,16 @@ function useHashRoute() {
 function useQueueData() {
   const [queue, setQueue] = useState(() => apiConfig.configured ? null : demoQueue());
   const [loading, setLoading] = useState(apiConfig.configured);
+  const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState(apiConfig.configured ? '' : 'โหมดสาธิต · ตั้งค่า VITE_API_URL เพื่อเชื่อมต่อ Google Apps Script');
+  const refreshInFlight = useRef(false);
   const refresh = useCallback(async () => {
-    if (!apiConfig.configured) return;
-    try { setLoading(true); setQueue(await apiRequest('getQueue')); setError(''); }
+    if (!apiConfig.configured || refreshInFlight.current) return;
+    refreshInFlight.current = true;
+    setRefreshing(true);
+    try { setQueue(await apiRequest('getQueue')); setError(''); }
     catch (err) { setError(err.message); setQueue(current => current || demoQueue()); }
-    finally { setLoading(false); }
+    finally { setLoading(false); setRefreshing(false); refreshInFlight.current = false; }
   }, []);
   useEffect(() => {
     refresh();
@@ -45,7 +59,7 @@ function useQueueData() {
     const timer = window.setInterval(refresh, 15000);
     return () => window.clearInterval(timer);
   }, [refresh]);
-  return { queue, setQueue, loading, error, refresh };
+  return { queue, setQueue, loading, refreshing, error, refresh };
 }
 
 function Shell({ children, title = '', role = '', simple = false }) {
@@ -149,24 +163,77 @@ function QueueDisplay({ queueData }) {
 function Kiosk({ onCreate }) {
   const [category, setCategory] = useState('');
   const [phone, setPhone] = useState('');
-  const [created, setCreated] = useState(null);
+  const [success, setSuccess] = useState(null);
   const [busy, setBusy] = useState(false);
+  useEffect(() => {
+    if (!success) return undefined;
+    const timer = window.setTimeout(() => setSuccess(null), 1800);
+    return () => window.clearTimeout(timer);
+  }, [success]);
   async function submit() {
     if (!category) return;
     setBusy(true);
-    try { setCreated(await onCreate(category, phone)); }
+    try {
+      const ticket = await onCreate(category, phone);
+      setSuccess(ticket);
+      setCategory('');
+      setPhone('');
+    }
     catch (err) { window.alert(err.message); }
     finally { setBusy(false); }
   }
-  if (created) return <YourQueue ticket={created} />;
   return <Shell simple><div className="kiosk-screen">
     <header className="kiosk-topbar"><span>Medical facility Kasetsart University Kamphaeng Saen Campus Medical Clinic</span><strong>From Admin</strong></header>
     <main className="kiosk-content"><h1>Press the queue</h1><section className="kiosk-panel">
       <div className="kiosk-panel-head"><strong>Select a category</strong><span>เลือกหมวดหมู่การรักษา</span></div>
       <div className="kiosk-options">{Object.entries(CATEGORY).map(([key, item]) => <button key={key} className={`kiosk-option ${category === key ? 'selected' : ''}`} onClick={() => setCategory(key)}><span className="kiosk-icon">{item.icon}</span><strong>{item.label}</strong></button>)}</div>
       <button className="kiosk-confirm" disabled={!category || busy} onClick={submit}>{busy ? 'กำลังออกคิว...' : 'ยืนยัน'}</button>
+      {success && <div className="kiosk-success" role="status">ออกบัตรคิวสำเร็จ · หมายเลข {success.ticketCode}</div>}
       <p className="kiosk-note">คิวฉุกเฉินสามารถถูกจัดลำดับก่อนโดยเจ้าหน้าที่ และคิวที่ถูกข้ามจะถูกเรียกซ้ำภายหลัง</p>
     </section></main>
+  </div></Shell>;
+}
+
+function HomeSelector() {
+  const choices = [
+    { icon: '▣', title: 'กดบัตรคิว', description: 'เลือกประเภทผู้รับบริการและรับหมายเลขคิว', path: '/kiosk' },
+    { icon: '▤', title: 'หน้าแสดงคิว', description: 'ดูคิวที่กำลังเรียกและคิวถัดไป', path: '/display' },
+    { icon: '⚙', title: 'เข้าสู่ระบบ', description: 'สำหรับเจ้าหน้าที่และระบบหลังบ้าน', path: '/login' },
+  ];
+  return <Shell simple><div className="entry-screen">
+    <header className="kiosk-topbar"><span>Medical facility Kasetsart University Kamphaeng Saen Campus Medical Clinic</span><strong>QueueFlow</strong></header>
+    <main className="kiosk-content entry-content"><h1>QueueFlow</h1><section className="kiosk-panel entry-panel">
+      <div className="kiosk-panel-head"><strong>เลือกเมนูการใช้งาน</strong><span>Select an option</span></div>
+      <div className="kiosk-options entry-options">{choices.map(choice => <button key={choice.path} className="kiosk-option entry-option" onClick={() => navigate(choice.path)}><span className="kiosk-icon">{choice.icon}</span><strong>{choice.title}</strong><small>{choice.description}</small></button>)}</div>
+      <p className="kiosk-note">กรุณาเลือกเมนูที่ต้องการเพื่อเริ่มใช้งาน QueueFlow</p>
+    </section></main>
+  </div></Shell>;
+}
+
+function Login() {
+  const [username, setUsername] = useState('');
+  const [password, setPassword] = useState('');
+  const [error, setError] = useState('');
+  function submit(event) {
+    event.preventDefault();
+    if (!username.trim() || !password) {
+      setError('กรุณากรอกชื่อผู้ใช้และรหัสผ่าน');
+      return;
+    }
+    sessionStorage.setItem('queueflow-authenticated', 'true');
+    sessionStorage.setItem('queueflow-operator-id', username.trim());
+    window.dispatchEvent(new Event('queueflow-auth-changed'));
+    navigate('/operator');
+  }
+  return <Shell simple><div className="entry-screen login-screen">
+    <header className="kiosk-topbar"><span>Medical facility Kasetsart University Kamphaeng Saen Campus Medical Clinic</span><strong>QueueFlow</strong></header>
+    <main className="kiosk-content"><h1>เข้าสู่ระบบ</h1><form className="login-panel" onSubmit={submit}>
+      <label>ชื่อผู้ใช้<input value={username} onChange={event => setUsername(event.target.value)} autoComplete="username" /></label>
+      <label>รหัสผ่าน<input type="password" value={password} onChange={event => setPassword(event.target.value)} autoComplete="current-password" /></label>
+      {error && <p className="login-error" role="alert">{error}</p>}
+      <button className="kiosk-confirm" type="submit">เข้าสู่ระบบ</button>
+      <button className="login-back" type="button" onClick={() => navigate('/')}>กลับหน้าหลัก</button>
+    </form></main>
   </div></Shell>;
 }
 
@@ -219,21 +286,29 @@ function FigmaQueue({ queueData, actions, loading, error }) {
   const source = queueData || demoQueue();
   const all = source.tickets || [];
   const active = all.filter(ticket => ['waiting', 'called', 'serving', 'skipped'].includes(ticket.status));
-  const current = source.current || active.find(ticket => ['called', 'serving'].includes(ticket.status)) || active[0];
+  const current = source.current && ['called', 'serving'].includes(source.current.status)
+    ? source.current
+    : active.find(ticket => ['called', 'serving'].includes(ticket.status)) || null;
+  const waiting = active
+    .filter(ticket => ticket.status === 'waiting')
+    .sort((a, b) => (Number(b.priority) || 0) - (Number(a.priority) || 0) || (Number(a.sequenceNo) || 0) - (Number(b.sequenceNo) || 0));
   const skipped = active.filter(ticket => ticket.status === 'skipped');
-  const upcoming = active.filter(ticket => ticket.id !== current?.id && ticket.status !== 'skipped').slice(0, 4);
+  const upcoming = waiting.slice(0, 4);
   const statusLabel = ticket => ticket.status === 'waiting' ? 'รอเรียก' : ticket.status === 'called' || ticket.status === 'serving' ? 'กำลังดำเนินการ' : 'ข้ามคิว';
   return <FigmaAdminFrame active="queue" title="Call the queue number">
     <StatusBanner error={error} />
     <section className="figma-queue-layout">
       <div className="figma-current-card">
-        <div className="figma-current-ticket">{current?.ticketCode || 'Q001'}</div>
-        <div className="figma-current-info"><strong>{CATEGORY[current?.category]?.label || 'ผู้ป่วยทั่วไป'}</strong><span>ช่องบริการหมายเลข 2</span></div>
+        <div className="figma-current-ticket">{current?.ticketCode || '—'}</div>
+        <div className="figma-current-info"><strong>{current ? (CATEGORY[current.category]?.label || current.categoryLabel || 'ผู้ป่วยทั่วไป') : 'ยังไม่มีคิวที่กำลังเรียก'}</strong><span>{current ? 'ช่องบริการหมายเลข 2' : 'กด “เรียกคิว” เพื่อเริ่มให้บริการ'}</span></div>
       </div>
       <div className="figma-queue-actions">
-        <button className="queue-action next" disabled={loading} onClick={actions.callNext}>เรียกคิว</button>
-        <button className="queue-action done" disabled={!current} onClick={() => current && actions.complete(current)}>เสร็จสิ้น <span>✓</span></button>
-        <button className="queue-action recall" disabled={!skipped[0]} onClick={() => skipped[0] && actions.recall(skipped[0])}>เรียกคิวซ้ำ <span>↻</span></button>
+        <button className="queue-action next" disabled={loading || Boolean(current) || !waiting.length} onClick={actions.callNext}>เรียกคิว</button>
+        <button className="queue-action done" disabled={loading || !current} onClick={() => current && actions.complete(current)}>เสร็จสิ้น <span>✓</span></button>
+        <button className="queue-action skip" disabled={loading || !current} onClick={() => current && actions.skip(current)}>ข้ามคิว <span>↷</span></button>
+        <button className="queue-action recall" disabled={loading || !skipped.length} onClick={() => skipped[0] && actions.recall(skipped[0])}>เรียกคิวซ้ำ <span>↻</span></button>
+        {current && <p className="queue-action-hint">กำลังให้บริการ {current.ticketCode}<br />กด “เสร็จสิ้น” หรือ “ข้ามคิว” ก่อนเรียกคิวถัดไป</p>}
+        {!current && !waiting.length && <p className="queue-action-hint">ไม่มีคิวที่รอเรียก</p>}
       </div>
       <section className="figma-upcoming-card">
         <header><strong>Upcoming Queue</strong><span>สถานะ</span><span>แก้ไข</span></header>
@@ -242,6 +317,13 @@ function FigmaQueue({ queueData, actions, loading, error }) {
         </div>)}
         {!upcoming.length && <div className="figma-upcoming-empty">ไม่มีคิวถัดไป</div>}
       </section>
+      {skipped.length > 0 && <section className="figma-skipped-card">
+        <header><strong>คิวที่ข้ามไว้</strong><span>สามารถเรียกซ้ำภายหลังได้</span></header>
+        {skipped.map(ticket => <div className="figma-skipped-row" key={ticket.id}>
+          <strong>{ticket.ticketCode}</strong><span>{CATEGORY[ticket.category]?.label || ticket.categoryLabel || 'ผู้ป่วยทั่วไป'}</span>
+          <button disabled={loading} onClick={() => actions.recall(ticket)}>เรียกคิวซ้ำ</button>
+        </div>)}
+      </section>}
     </section>
   </FigmaAdminFrame>;
 }
@@ -320,12 +402,34 @@ function Dashboard({ queueData, loading, error }) {
 
 function App() {
   const route = useHashRoute();
+  const [, refreshAuth] = useState(0);
+  useEffect(() => {
+    const onAuthChanged = () => refreshAuth(version => version + 1);
+    window.addEventListener('queueflow-auth-changed', onAuthChanged);
+    return () => window.removeEventListener('queueflow-auth-changed', onAuthChanged);
+  }, []);
   const { queue, setQueue, loading, error } = useQueueData();
+  const [actionBusy, setActionBusy] = useState(false);
+  const [actionError, setActionError] = useState('');
   const mutate = useCallback(async (action, payload, localUpdate) => {
-    if (apiConfig.configured) { const data = await apiRequest(action, payload); setQueue(data.queue || data); return data.ticket || data; }
-    const result = localUpdate?.(queue || demoQueue()) || {};
-    setQueue(result.queue || result);
-    return result.ticket || result;
+    setActionBusy(true);
+    setActionError('');
+    try {
+      if (apiConfig.configured) {
+        const requestPayload = { ...payload, operatorId: payload?.operatorId || sessionStorage.getItem('queueflow-operator-id') || '' };
+        const data = await apiRequest(action, requestPayload);
+        setQueue(data.queue || data);
+        return data.ticket || data;
+      }
+      const result = localUpdate?.(queue || demoQueue()) || {};
+      setQueue(result.queue || result);
+      return result.ticket || result;
+    } catch (err) {
+      setActionError(err.message || 'ไม่สามารถดำเนินการกับคิวได้');
+      throw err;
+    } finally {
+      setActionBusy(false);
+    }
   }, [queue, setQueue]);
   const createTicket = useCallback((category, phone) => mutate('createTicket', { category, phone }, prev => {
     const n = prev.tickets.length + 1;
@@ -334,20 +438,36 @@ function App() {
   }), [mutate]);
   const ticketAction = useCallback((action, ticket) => mutate(action, { ticketId: ticket.id }, prev => {
     const nextStatus = { callTicket: 'called', skipTicket: 'skipped', recallTicket: 'called', completeTicket: 'completed', cancelTicket: 'cancelled' }[action];
-    return { queue: { ...prev, tickets: prev.tickets.map(item => item.id === ticket.id ? { ...item, status: nextStatus } : item) } };
+    const updatedAt = new Date().toISOString();
+    const updatedTicket = { ...ticket, status: nextStatus, updatedAt };
+    if (nextStatus === 'called') updatedTicket.calledAt = updatedAt;
+    if (nextStatus === 'skipped') updatedTicket.skippedAt = updatedAt;
+    return { ticket: updatedTicket, queue: { ...prev, tickets: prev.tickets.map(item => item.id === ticket.id ? updatedTicket : item), current: nextStatus === 'called' ? updatedTicket : (prev.current?.id === ticket.id ? null : prev.current) } };
   }), [mutate]);
   const actions = useMemo(() => ({
-    callNext: () => mutate('callNext', {}, prev => { const next = prev.tickets.find(t => t.status === 'waiting' && t.category === 'emergency') || prev.tickets.find(t => t.status === 'waiting'); return { queue: { ...prev, tickets: prev.tickets.map(item => item.id === next?.id ? { ...item, status: 'called' } : item) } }; }),
+    callNext: () => mutate('callNext', {}, prev => {
+      const waiting = prev.tickets.filter(ticket => ticket.status === 'waiting').sort((a, b) => (Number(b.priority) || 0) - (Number(a.priority) || 0) || (Number(a.sequenceNo) || 0) - (Number(b.sequenceNo) || 0));
+      const next = waiting[0];
+      if (!next) return { queue: prev };
+      const updatedAt = new Date().toISOString();
+      const updatedTicket = { ...next, status: 'called', calledAt: updatedAt, updatedAt };
+      return { ticket: updatedTicket, queue: { ...prev, tickets: prev.tickets.map(item => item.id === next.id ? updatedTicket : item), current: updatedTicket } };
+    }),
     call: ticket => ticketAction('callTicket', ticket), skip: ticket => ticketAction('skipTicket', ticket), recall: ticket => ticketAction('recallTicket', ticket), complete: ticket => ticketAction('completeTicket', ticket), cancel: ticket => ticketAction('cancelTicket', ticket),
   }), [mutate, ticketAction]);
+  const adminRoute = ['/operator', '/admin-queue', '/dashboard', '/report'].includes(route);
+  const authenticated = sessionStorage.getItem('queueflow-authenticated') === 'true';
+  if (route === '/login') return <Login />;
+  if (adminRoute && !authenticated) return <Login />;
   if (route === '/kiosk') return <Kiosk onCreate={createTicket} />;
   if (route === '/confirm') return <ConfirmVisit />;
   if (route === '/ticket/general') return <YourQueue ticket={{ ticketCode: 'Q001', category: 'general' }} />;
   if (route === '/ticket/emergency') return <YourQueue ticket={{ ticketCode: 'Q001', category: 'emergency' }} />;
-  if (route === '/operator' || route === '/admin-queue') return <FigmaQueue queueData={queue} actions={actions} loading={loading} error={error} />;
-  if (route === '/dashboard') return <FigmaDashboard queueData={queue} loading={loading} error={error} />;
-  if (route === '/report') return <FigmaReport queueData={queue} error={error} />;
-  return <QueueDisplay queueData={queue} />;
+  if (route === '/operator' || route === '/admin-queue') return <FigmaQueue queueData={queue} actions={actions} loading={loading || actionBusy} error={error || actionError} />;
+  if (route === '/dashboard') return <FigmaDashboard queueData={queue} loading={loading || actionBusy} error={error || actionError} />;
+  if (route === '/report') return <FigmaReport queueData={queue} error={error || actionError} />;
+  if (route === '/display') return <QueueDisplay queueData={queue} />;
+  return <HomeSelector />;
 }
 
 export default App;
