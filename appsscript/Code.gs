@@ -110,6 +110,7 @@ function handle_(action, payload) {
     case 'callTicket': return withLock_(function() { return transitionTicket_(payload.ticketId, 'called', 'CALL_TICKET', ['waiting', 'skipped'], payload); });
     case 'skipTicket': return withLock_(function() { return transitionTicket_(payload.ticketId, 'skipped', 'SKIP_TICKET', ['called', 'serving'], payload); });
     case 'recallTicket': return withLock_(function() { return transitionTicket_(payload.ticketId, 'called', 'RECALL_TICKET', ['skipped'], payload); });
+    case 'repeatCall': return withLock_(function() { return repeatCall_(payload); });
     case 'startService': return withLock_(function() { return transitionTicket_(payload.ticketId, 'serving', 'START_SERVICE', ['called'], payload); });
     case 'completeTicket': return withLock_(function() { return transitionTicket_(payload.ticketId, 'completed', 'COMPLETE_TICKET', ['called', 'serving'], payload); });
     case 'cancelTicket': return withLock_(function() { return transitionTicket_(payload.ticketId, 'cancelled', 'CANCEL_TICKET', ['waiting', 'skipped', 'called'], payload); });
@@ -187,6 +188,20 @@ function transitionTicket_(ticketId, nextStatus, eventType, allowedStatuses, pay
   if (nextStatus === 'called' && current === 'skipped') ticket.servingAt = '';
   updateRecord_(found, SHEETS.TICKETS, TICKET_HEADERS, ticket);
   appendEvent_(ticket, eventType, current, nextStatus, payload || {});
+  return { ticket: ticket, queue: queueSnapshot_() };
+}
+
+function repeatCall_(payload) {
+  if (!payload || !payload.ticketId) throw new Error('ต้องระบุ ticketId');
+  const found = findRecord_(SHEETS.TICKETS, payload.ticketId);
+  if (!found) throw new Error('ไม่พบหมายเลขคิวนี้');
+  if (found.record.status !== 'called' && found.record.status !== 'serving') {
+    throw new Error('สามารถเรียกคิวซ้ำได้เฉพาะคิวที่กำลังให้บริการ');
+  }
+  const timestamp = now_();
+  const ticket = Object.assign({}, found.record, { calledAt: timestamp, updatedAt: timestamp });
+  updateRecord_(found, SHEETS.TICKETS, TICKET_HEADERS, ticket);
+  appendEvent_(ticket, 'REPEAT_CALL', found.record.status, found.record.status, payload);
   return { ticket: ticket, queue: queueSnapshot_() };
 }
 

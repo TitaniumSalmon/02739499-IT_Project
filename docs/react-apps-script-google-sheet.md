@@ -26,7 +26,7 @@ React ส่ง body เป็น `text/plain` เพื่อหลีกเล
 
 ## API actions
 
-`health`, `getQueue`, `createTicket`, `callNext`, `callTicket`, `skipTicket`, `recallTicket`, `startService`, `completeTicket`, `cancelTicket`, `getDashboard`
+`health`, `getQueue`, `createTicket`, `callNext`, `callTicket`, `skipTicket`, `recallTicket`, `repeatCall`, `startService`, `completeTicket`, `cancelTicket`, `getDashboard`
 
 การสร้างหมายเลขคิวและการเปลี่ยนสถานะใช้ `LockService` เพื่อป้องกัน race condition เมื่อมีหลายเครื่องขอคิวพร้อมกัน คิวฉุกเฉินมี priority สูงกว่าเฉพาะตอนเลือกคิวถัดไป ส่วนคิวที่ถูกข้ามจะคงอยู่ด้วยสถานะ `skipped` และเรียกกลับด้วย `recallTicket` ได้
 
@@ -63,6 +63,7 @@ Routes ที่มีใน frontend:
 - `เสร็จสิ้น` ปิดคิวที่กำลังให้บริการ และเปิดให้เรียกคิวถัดไป
 - `ข้ามคิว` ย้ายคิวปัจจุบันไปสถานะ `skipped`
 - `เรียกคิวซ้ำ` เรียกคิวที่ถูกข้ามกลับมาให้บริการภายหลัง
+- ทุกครั้งที่เรียกคิวหรือเรียกคิวซ้ำ ระบบจะประกาศหมายเลขคิวและช่องบริการด้วยเสียงภาษาไทยผ่าน Web Speech API ของเบราว์เซอร์
 
 ต้อง Deploy Apps Script เป็น version ล่าสุดทุกครั้งหลังแก้ `appsscript/Code.gs` ไม่เช่นนั้น Web App จะยังใช้โค้ดเวอร์ชันเก่า
 

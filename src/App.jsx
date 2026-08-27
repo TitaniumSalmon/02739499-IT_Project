@@ -11,6 +11,7 @@ import adminAccount from './assets/admin-account.svg';
 import adminDashboard from './assets/admin-dashboard.svg';
 import adminReport from './assets/admin-report.svg';
 import queueAlarm from './assets/queue-alarm.svg';
+import { speakQueue } from './speech.js';
 
 const CATEGORY = {
   general: { label: 'ผู้ป่วยทั่วไป', description: 'รับบริการตามลำดับคิวปกติ', color: 'blue', icon: '▣' },
@@ -295,6 +296,24 @@ function FigmaQueue({ queueData, actions, loading, error }) {
   const skipped = active.filter(ticket => ticket.status === 'skipped');
   const upcoming = waiting.slice(0, 4);
   const statusLabel = ticket => ticket.status === 'waiting' ? 'รอเรียก' : ticket.status === 'called' || ticket.status === 'serving' ? 'กำลังดำเนินการ' : 'ข้ามคิว';
+  async function handleCallNext() {
+    try {
+      const ticket = await actions.callNext();
+      if (ticket?.ticketCode) speakQueue(ticket);
+    } catch (error) { /* The action error is shown by the status banner. */ }
+  }
+  async function handleRecall(ticket) {
+    try {
+      const recalled = await actions.recall(ticket);
+      speakQueue(recalled?.ticketCode ? recalled : ticket);
+    } catch (error) { /* The action error is shown by the status banner. */ }
+  }
+  async function handleRepeat(ticket) {
+    try {
+      const repeated = await actions.repeat(ticket);
+      speakQueue(repeated?.ticketCode ? repeated : ticket);
+    } catch (error) { /* The action error is shown by the status banner. */ }
+  }
   return <FigmaAdminFrame active="queue" title="Call the queue number">
     <StatusBanner error={error} />
     <section className="figma-queue-layout">
@@ -303,11 +322,11 @@ function FigmaQueue({ queueData, actions, loading, error }) {
         <div className="figma-current-info"><strong>{current ? (CATEGORY[current.category]?.label || current.categoryLabel || 'ผู้ป่วยทั่วไป') : 'ยังไม่มีคิวที่กำลังเรียก'}</strong><span>{current ? 'ช่องบริการหมายเลข 2' : 'กด “เรียกคิว” เพื่อเริ่มให้บริการ'}</span></div>
       </div>
       <div className="figma-queue-actions">
-        <button className="queue-action next" disabled={loading || Boolean(current) || !waiting.length} onClick={actions.callNext}>เรียกคิว</button>
+        <button className="queue-action next" disabled={loading || Boolean(current) || !waiting.length} onClick={handleCallNext}>เรียกคิว</button>
         <button className="queue-action done" disabled={loading || !current} onClick={() => current && actions.complete(current)}>เสร็จสิ้น <span>✓</span></button>
         <button className="queue-action skip" disabled={loading || !current} onClick={() => current && actions.skip(current)}>ข้ามคิว <span>↷</span></button>
-        <button className="queue-action recall" disabled={loading || !skipped.length} onClick={() => skipped[0] && actions.recall(skipped[0])}>เรียกคิวซ้ำ <span>↻</span></button>
-        {current && <p className="queue-action-hint">กำลังให้บริการ {current.ticketCode}<br />กด “เสร็จสิ้น” หรือ “ข้ามคิว” ก่อนเรียกคิวถัดไป</p>}
+        <button className="queue-action recall" disabled={loading || (!skipped.length && !current)} onClick={() => skipped[0] ? handleRecall(skipped[0]) : current && handleRepeat(current)}>เรียกคิวซ้ำ <span>↻</span></button>
+        {current && <p className="queue-action-hint">กำลังให้บริการ {current.ticketCode}<br />กด “เรียกคิวซ้ำ” เพื่อประกาศอีกครั้ง หรือกด “เสร็จสิ้น” / “ข้ามคิว” ก่อนเรียกคิวถัดไป</p>}
         {!current && !waiting.length && <p className="queue-action-hint">ไม่มีคิวที่รอเรียก</p>}
       </div>
       <section className="figma-upcoming-card">
@@ -321,7 +340,7 @@ function FigmaQueue({ queueData, actions, loading, error }) {
         <header><strong>คิวที่ข้ามไว้</strong><span>สามารถเรียกซ้ำภายหลังได้</span></header>
         {skipped.map(ticket => <div className="figma-skipped-row" key={ticket.id}>
           <strong>{ticket.ticketCode}</strong><span>{CATEGORY[ticket.category]?.label || ticket.categoryLabel || 'ผู้ป่วยทั่วไป'}</span>
-          <button disabled={loading} onClick={() => actions.recall(ticket)}>เรียกคิวซ้ำ</button>
+          <button disabled={loading} onClick={() => handleRecall(ticket)}>เรียกคิวซ้ำ</button>
         </div>)}
       </section>}
     </section>
@@ -453,7 +472,11 @@ function App() {
       const updatedTicket = { ...next, status: 'called', calledAt: updatedAt, updatedAt };
       return { ticket: updatedTicket, queue: { ...prev, tickets: prev.tickets.map(item => item.id === next.id ? updatedTicket : item), current: updatedTicket } };
     }),
-    call: ticket => ticketAction('callTicket', ticket), skip: ticket => ticketAction('skipTicket', ticket), recall: ticket => ticketAction('recallTicket', ticket), complete: ticket => ticketAction('completeTicket', ticket), cancel: ticket => ticketAction('cancelTicket', ticket),
+    call: ticket => ticketAction('callTicket', ticket), skip: ticket => ticketAction('skipTicket', ticket), recall: ticket => ticketAction('recallTicket', ticket), repeat: ticket => mutate('repeatCall', { ticketId: ticket.id }, prev => {
+      const updatedAt = new Date().toISOString();
+      const updatedTicket = { ...ticket, calledAt: updatedAt, updatedAt };
+      return { ticket: updatedTicket, queue: { ...prev, tickets: prev.tickets.map(item => item.id === ticket.id ? updatedTicket : item), current: updatedTicket } };
+    }), complete: ticket => ticketAction('completeTicket', ticket), cancel: ticket => ticketAction('cancelTicket', ticket),
   }), [mutate, ticketAction]);
   const adminRoute = ['/operator', '/admin-queue', '/dashboard', '/report'].includes(route);
   const authenticated = sessionStorage.getItem('queueflow-authenticated') === 'true';
