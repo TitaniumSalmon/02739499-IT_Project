@@ -122,7 +122,7 @@ function QueueDisplay({ queueData }) {
         <h1>Call the queue number</h1>
         <p>Medical facility Kasetsart University Kamphaeng Saen Campus Medical Clinic</p>
       </div>
-      <div className="queue-display-header-actions">
+      {/* <div className="queue-display-header-actions">
         <nav className="queue-display-nav" aria-label="เมนูหลัก">
           <button onClick={() => navigate('/operator')}>จัดการคิว</button>
           <button onClick={() => navigate('/dashboard')}>Dashboard</button>
@@ -131,7 +131,7 @@ function QueueDisplay({ queueData }) {
           <button onClick={() => navigate('/confirm')}>ตรวจสอบคิว</button>
         </nav>
         <button className="queue-display-admin" onClick={() => navigate('/operator')} aria-label="เปิดหน้าจัดการคิว"><strong>Admin</strong><img src={adminAccount} alt="Admin account" /></button>
-      </div>
+      </div> */}
     </header>
     <main className="queue-display-main">
       <section className="queue-display-current-grid">
