@@ -196,16 +196,16 @@ function Kiosk({ onCreate }) {
       <p className="kiosk-note">คิวฉุกเฉินสามารถถูกจัดลำดับก่อนโดยเจ้าหน้าที่ และคิวที่ถูกข้ามจะถูกเรียกซ้ำภายหลัง</p>
     </section></main>
     {success && <section className="print-ticket" aria-hidden="true">
-      <strong>QueueFlow</strong>
-      <span>Medical facility Kasetsart University</span>
-      <span>Kamphaeng Saen Campus Medical Clinic</span>
+      <strong>บัตรคิว</strong>
+      <span>สถานพยาบาล</span>
+      <span>มหาวิทยาลัยเกษตรศาสตร์ วิทยาเขตกำแพงแสน</span>
       <hr />
       <small>หมายเลขคิว</small>
       <b>{success.ticketCode}</b>
       <span>{CATEGORY[success.category]?.label || 'ผู้ป่วยทั่วไป'}</span>
       <span>{new Date(success.issuedAt || Date.now()).toLocaleString('th-TH')}</span>
       <hr />
-      <span>กรุณารอฟังเสียงเรียกคิว</span>
+      <span>กรุณารับเอกสารและวางเอกสารในตะกร้า</span>
     </section>}
   </div></Shell>;
 }

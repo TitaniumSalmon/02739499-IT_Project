@@ -1,0 +1,10 @@
+powershell -ExecutionPolicy Bypass -File .\db\setup-local.ps1
+
+powershell -ExecutionPolicy Bypass -File .\server\start-local.ps1
+
+# Terminal 1: เปิด API + PostgreSQL
+npm run start:local
+
+# Terminal 2: เปิด React แบบ hot reload
+$env:VITE_API_URL="http://127.0.0.1:3000/api"
+npm run dev
