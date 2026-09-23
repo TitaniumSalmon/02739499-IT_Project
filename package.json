@@ -1,0 +1,27 @@
+{
+  "name": "queueflow-react-local",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "QueueFlow React UI and local PostgreSQL API",
+  "main": "src/main.jsx",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview",
+    "start": "node server/index.js",
+    "start:local": "powershell -ExecutionPolicy Bypass -File .\\server\\start-local.ps1"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "dependencies": {
+    "pg": "^8.23.0",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1"
+  },
+  "devDependencies": {
+    "@vitejs/plugin-react": "^4.3.1",
+    "vite": "^5.4.8"
+  }
+}
