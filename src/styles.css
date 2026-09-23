@@ -50,6 +50,23 @@
 .entry-content{padding-top:58px}.entry-panel{max-width:980px}.entry-options{grid-template-columns:repeat(3,1fr);gap:22px;padding:45px 34px 30px}.entry-option{height:190px;flex-direction:column;gap:7px;text-align:center}.entry-option .kiosk-icon{font-size:48px}.entry-option strong{font-size:28px}.entry-option small{max-width:220px;color:#52617b;font-size:13px;line-height:1.35}.kiosk-success{margin:0 42px 18px;padding:12px 14px;border-radius:8px;background:#d7f5e2;color:#17663a;text-align:center;font-weight:700}.login-screen .kiosk-content{padding-top:70px}.login-panel{width:min(480px,100%);display:flex;flex-direction:column;gap:16px;background:#fff;border:1px solid #d1d5dc;border-radius:12px;box-shadow:0 4px 5px #0003;padding:30px 32px}.login-panel label{display:flex;flex-direction:column;gap:7px;color:#324363;font-size:14px;font-weight:700}.login-panel input{padding:13px 14px;border:1px solid #c5cad6;border-radius:7px;background:#fff;color:#1d2b46}.login-panel .kiosk-confirm{width:100%;margin:8px 0 0}.login-error{margin:0;color:#b42318;font-size:13px}.login-back{border:0;background:transparent;color:#0754c8;font-size:14px;cursor:pointer}
 @media(max-width:700px){.entry-content{padding-top:30px}.entry-options{grid-template-columns:1fr;padding:25px 15px 20px;gap:12px}.entry-option{height:125px}.entry-option .kiosk-icon{font-size:34px}.entry-option strong{font-size:22px}.entry-option small{font-size:11px}.login-screen .kiosk-content{padding-top:32px}.login-panel{padding:22px 17px}.kiosk-success{margin-inline:15px}}
 
+/* Thermal receipt printing: use the browser's normal print dialog. */
+.kiosk-success{display:flex;align-items:center;justify-content:center;gap:12px;flex-wrap:wrap}
+.print-ticket-button{border:1px solid #2861b4;border-radius:7px;background:#fff;color:#2861b4;padding:7px 12px;font-size:13px;font-weight:700;cursor:pointer}
+.print-ticket{display:none}
+@media print{
+  @page{size:80mm auto;margin:0}
+  body *{visibility:hidden!important}
+  .print-ticket,.print-ticket *{visibility:visible!important}
+  .print-ticket{position:absolute;left:0;top:0;display:flex!important;width:72mm;min-height:90mm;padding:7mm 4mm;flex-direction:column;align-items:center;gap:2.5mm;background:#fff;color:#000;font-family:Arial,'Noto Sans Thai',sans-serif;text-align:center}
+  .print-ticket strong{font-size:18px}
+  .print-ticket span{font-size:10px;line-height:1.25}
+  .print-ticket small{font-size:12px;margin-top:3mm}
+  .print-ticket b{font-size:42px;line-height:1.1;letter-spacing:1px}
+  .print-ticket hr{width:100%;border:0;border-top:1px dashed #000;margin:2mm 0}
+  .print-ticket-button{display:none!important}
+}
+
 /* Queue lifecycle controls */
 .queue-action.skip{background:#ffdca8}.queue-action-hint{margin:0;color:#66738c;font-size:13px;line-height:1.45;text-align:center}.figma-skipped-card{grid-column:1 / -1;background:#fff;border-radius:15px;box-shadow:0 4px 4px rgba(0,0,0,.25);overflow:hidden}.figma-skipped-card header,.figma-skipped-row{display:grid;grid-template-columns:180px 1fr 150px;align-items:center;gap:14px}.figma-skipped-card header{min-height:64px;padding:12px 20px;background:#fff1c6;color:#604d12}.figma-skipped-card header strong{font-size:22px}.figma-skipped-card header span{font-size:14px}.figma-skipped-row{min-height:64px;padding:10px 20px;border-top:1px solid rgba(0,0,0,.12);color:rgba(4,27,60,.75);font-size:18px}.figma-skipped-row button{border:1px solid #2861b4;border-radius:7px;background:#fff;color:#2861b4;padding:8px 12px;font-weight:600;cursor:pointer}.figma-skipped-row button:disabled{opacity:.55;cursor:not-allowed}
 @media(max-width:620px){.figma-queue-actions{grid-template-columns:repeat(2,1fr)}.queue-action-hint{grid-column:1 / -1;font-size:11px}.figma-skipped-card header,.figma-skipped-row{grid-template-columns:78px 1fr 84px;padding-inline:10px;gap:8px}.figma-skipped-card header strong{font-size:16px}.figma-skipped-card header span{font-size:11px}.figma-skipped-row{font-size:12px}.figma-skipped-row button{font-size:11px;padding:6px 5px}}

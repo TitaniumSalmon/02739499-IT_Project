@@ -189,9 +189,24 @@ function Kiosk({ onCreate }) {
       <div className="kiosk-panel-head"><strong>Select a category</strong><span>เลือกหมวดหมู่การรักษา</span></div>
       <div className="kiosk-options">{Object.entries(CATEGORY).map(([key, item]) => <button key={key} className={`kiosk-option ${category === key ? 'selected' : ''}`} onClick={() => setCategory(key)}><span className="kiosk-icon">{item.icon}</span><strong>{item.label}</strong></button>)}</div>
       <button className="kiosk-confirm" disabled={!category || busy} onClick={submit}>{busy ? 'กำลังออกคิว...' : 'ยืนยัน'}</button>
-      {success && <div className="kiosk-success" role="status">ออกบัตรคิวสำเร็จ · หมายเลข {success.ticketCode}</div>}
+      {success && <div className="kiosk-success" role="status">
+        <span>ออกบัตรคิวสำเร็จ · หมายเลข {success.ticketCode}</span>
+        <button className="print-ticket-button" type="button" onClick={() => window.print()}>พิมพ์บัตรคิว</button>
+      </div>}
       <p className="kiosk-note">คิวฉุกเฉินสามารถถูกจัดลำดับก่อนโดยเจ้าหน้าที่ และคิวที่ถูกข้ามจะถูกเรียกซ้ำภายหลัง</p>
     </section></main>
+    {success && <section className="print-ticket" aria-hidden="true">
+      <strong>QueueFlow</strong>
+      <span>Medical facility Kasetsart University</span>
+      <span>Kamphaeng Saen Campus Medical Clinic</span>
+      <hr />
+      <small>หมายเลขคิว</small>
+      <b>{success.ticketCode}</b>
+      <span>{CATEGORY[success.category]?.label || 'ผู้ป่วยทั่วไป'}</span>
+      <span>{new Date(success.issuedAt || Date.now()).toLocaleString('th-TH')}</span>
+      <hr />
+      <span>กรุณารอฟังเสียงเรียกคิว</span>
+    </section>}
   </div></Shell>;
 }
 
